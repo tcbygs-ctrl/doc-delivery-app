@@ -56,9 +56,63 @@ async function fetchJobs(force = false) {
 app.get('/api/jobs', async (req, res) => {
   try {
     const jobs = await fetchJobs(req.query.refresh === '1');
-    res.json({ success: true, data: jobs, timestamp: Date.now() });
+    const activeJobs = jobs.filter(job => {
+      if (!job.Key) return false;
+      const statusRaw = String(job.Status || '').trim().toLowerCase();
+      const cancel = String(job.Cancel || '').trim().toLowerCase();
+      if (cancel === 'yes' || cancel === 'true') return false;
+      if (statusRaw === 'cancelled') return false;
+      return statusRaw !== 'finished' && statusRaw !== '3';
+    });
+    res.json({ success: true, data: activeJobs, timestamp: Date.now() });
   } catch (err) {
     console.error('fetchJobs error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/jobs/finished', async (req, res) => {
+  try {
+    const jobs = await fetchJobs(req.query.refresh === '1');
+    let finishedJobs = jobs.filter(job => {
+      if (!job.Key) return false;
+      const statusRaw = String(job.Status || '').trim().toLowerCase();
+      const cancel = String(job.Cancel || '').trim().toLowerCase();
+      if (cancel === 'yes' || cancel === 'true') return false;
+      if (statusRaw === 'cancelled') return false;
+      return statusRaw === 'finished' || statusRaw === '3';
+    });
+
+    finishedJobs.sort((a, b) => (b['Dropoff'] || b['เวลาทำรายการ'] || '').localeCompare(a['Dropoff'] || a['เวลาทำรายการ'] || ''));
+
+    const { month, page = 1, limit = 50 } = req.query;
+
+    if (month) {
+      finishedJobs = finishedJobs.filter(item => {
+        const dropoff = item['Dropoff'] || item['เวลาทำรายการ'] || '';
+        const match = dropoff.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        if (match) {
+          let year = parseInt(match[3]);
+          if (year > 2500) year -= 543;
+          return `${year}-${match[2]}` === month;
+        }
+        return false;
+      });
+    }
+
+    const startIdx = (parseInt(page) - 1) * parseInt(limit);
+    const endIdx = parseInt(page) * parseInt(limit);
+    const paginated = finishedJobs.slice(startIdx, endIdx);
+
+    res.json({
+      success: true,
+      data: paginated,
+      hasMore: endIdx < finishedJobs.length,
+      total: finishedJobs.length,
+      timestamp: Date.now()
+    });
+  } catch (err) {
+    console.error('fetchFinishedJobs error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

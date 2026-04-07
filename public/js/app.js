@@ -1,44 +1,134 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // Elements
+  // === State ===
   const tabs = ['pending', 'started', 'finished'];
   const data = { pending: [], started: [], finished: [] };
   let currentTab = 'pending';
   let activeJob = null;
 
+  // Selection & Filter state per tab
+  const selectedKeys = { pending: new Set(), started: new Set(), finished: new Set() };
+  const searchTerms = { pending: '', started: '', finished: '' };
+  const activeBranch = { pending: null, started: null, finished: null };
+  let finishedMonth = '';
+  let finishedPage = 1;
+  let finishedHasMore = false;
+  let isFetchingFinished = false;
+  let totalFinishedCount = 0;
+  let sortOrderPending = 'desc';
+  let filterTodayPending = false;
+
+  // === DOM Elements ===
   const navBtns = document.querySelectorAll('.nav-btn');
   const panels = document.querySelectorAll('.tab-panel');
   const refreshBtn = document.getElementById('refreshBtn');
   const syncDot = document.getElementById('syncDot');
   const syncLabel = document.getElementById('syncLabel');
-  
-  // Modal Elements
+
+  // Modal
   const modalBtn = document.getElementById('confirmBtn');
   const modalLabel = document.getElementById('confirmBtnLabel');
   const modalOverlay = document.getElementById('modalOverlay');
   const modalCloseBtn = document.getElementById('modalCloseBtn');
 
-  // Initialization
+  // Batch Bar
+  const batchBar = document.getElementById('batchBar');
+  const batchCount = document.getElementById('batchCount');
+  const batchCancelBtn = document.getElementById('batchCancelBtn');
+  const batchConfirmBtn = document.getElementById('batchConfirmBtn');
+  const batchConfirmLabel = document.getElementById('batchConfirmLabel');
+
+  // Batch Signature Modal
+  const batchSigOverlay = document.getElementById('batchSigOverlay');
+  const batchSigCloseBtn = document.getElementById('batchSigCloseBtn');
+  const batchSigClearBtn = document.getElementById('batchSigClearBtn');
+  const batchSigConfirmBtn = document.getElementById('batchSigConfirmBtn');
+  const batchSigConfirmLabel = document.getElementById('batchSigConfirmLabel');
+  const batchSigInfo = document.getElementById('batchSigInfo');
+
+  // Theme
+  const themeToggle = document.getElementById('themeToggle');
+
+  // Signature (main modal)
+  let canvas, ctx;
+  let isDrawing = false;
+  let hasSignature = false;
+  let lastX = 0;
+  let lastY = 0;
+
+  // Signature (batch modal)
+  let bCanvas, bCtx;
+  let bIsDrawing = false;
+  let bHasSignature = false;
+  let bLastX = 0;
+  let bLastY = 0;
+
+  // Signature Viewer
+  let sigViewer;
+
+  // === Init ===
+  initTheme();
   initTabs();
+  initSearch();
+  initDateFilter();
   initModalHandlers();
+  initBatchHandlers();
+  initBatchSigModal();
   initSignaturePad();
+  createSignatureViewer();
   fetchData();
-  
-  // Auto refresh every 15s
+  fetchFinishedJobs(true);
   setInterval(() => fetchData(false), 15000);
-  
+
   refreshBtn.addEventListener('click', () => {
-    const icon = refreshBtn.querySelector('svg');
-    icon.style.transform = 'rotate(180deg)';
-    icon.style.transition = 'transform 0.3s';
-    fetchData(true).finally(() => {
+    const icon = refreshBtn.querySelector('svg') || refreshBtn.querySelector('i');
+    if (icon) {
+      icon.style.transform = 'rotate(180deg)';
+      icon.style.transition = 'transform 0.3s';
+    }
+    Promise.all([fetchData(true), fetchFinishedJobs(true)]).finally(() => {
       setTimeout(() => {
-        icon.style.transform = 'none';
-        icon.style.transition = 'none';
+        if (icon) {
+          icon.style.transform = 'none';
+          icon.style.transition = 'none';
+        }
       }, 300);
     });
   });
 
-  // --- API & Data ---
+  // ========================
+  // THEME
+  // ========================
+  function initTheme() {
+    const saved = localStorage.getItem('docdelivery-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+    updateThemeIcons(saved);
+
+    themeToggle.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('docdelivery-theme', next);
+      updateThemeIcons(next);
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', next === 'dark' ? '#050b18' : '#f0f2f5');
+    });
+  }
+
+  function updateThemeIcons(theme) {
+    const darkIcon = themeToggle.querySelector('.theme-icon-dark');
+    const lightIcon = themeToggle.querySelector('.theme-icon-light');
+    if (theme === 'dark') {
+      darkIcon.classList.remove('hidden');
+      lightIcon.classList.add('hidden');
+    } else {
+      darkIcon.classList.add('hidden');
+      lightIcon.classList.remove('hidden');
+    }
+  }
+
+  // ========================
+  // API & DATA
+  // ========================
   async function fetchData(force = false) {
     setSyncStatus('syncing', 'กำลังซิงค์...');
     try {
@@ -48,12 +138,60 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!json.success) throw new Error(json.error);
       
       processRawData(json.data);
-      renderAllTabs();
+      renderBranchChips('pending'); renderTab('pending');
+      renderBranchChips('started'); renderTab('started');
       setSyncStatus('online', 'ออนไลน์');
     } catch (err) {
       console.error(err);
       setSyncStatus('error', 'ออฟไลน์');
       if (force) showToast('ไม่สามารถดึงข้อมูลได้', 'error');
+    }
+  }
+
+  async function fetchFinishedJobs(reset = false) {
+    if (isFetchingFinished) return;
+    isFetchingFinished = true;
+    if (reset) {
+      finishedPage = 1;
+      data.finished = [];
+      const listEl = document.getElementById('list-finished');
+      if (listEl) listEl.innerHTML = '';
+      totalFinishedCount = 0;
+    }
+    
+    document.getElementById('loading-finished').classList.remove('hidden');
+    document.getElementById('empty-finished').classList.add('hidden');
+    document.getElementById('load-more-container').classList.add('hidden');
+
+    try {
+      let url = `/api/jobs/finished?page=${finishedPage}&limit=20`;
+      if (finishedMonth) url += `&month=${finishedMonth}`;
+      
+      const res = await fetch(url);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+
+      if (reset) {
+        data.finished = json.data;
+      } else {
+        data.finished = [...data.finished, ...json.data];
+      }
+      
+      finishedHasMore = json.hasMore;
+      totalFinishedCount = json.total || data.finished.length;
+      
+      renderBranchChips('finished');
+      renderTab('finished');
+      
+    } catch (err) {
+      console.error('fetchFinishedJobs error:', err);
+      showToast('ไม่สามารถดึงข้อมูลประวัติได้', 'error');
+    } finally {
+      isFetchingFinished = false;
+      document.getElementById('loading-finished').classList.add('hidden');
+      if (finishedHasMore) {
+        document.getElementById('load-more-container').classList.remove('hidden');
+      }
     }
   }
 
@@ -65,27 +203,19 @@ document.addEventListener('DOMContentLoaded', () => {
   function processRawData(rows) {
     data.pending = [];
     data.started = [];
-    data.finished = [];
     
     rows.forEach(row => {
       if (!row['Key']) return;
-      const status = String(row['Status'] || '').trim();
-      const cancel = String(row['Cancel'] || '').trim().toLowerCase();
-      
-      if (cancel === 'yes' || cancel === 'true') return; // Skip cancelled
-
-      // Determine array based on status
-      if (status === 'pending' || status === '1' || status === '') {
-        data.pending.push(row);
-      } else if (status === 'Started' || status === '2') {
+      const statusRaw = String(row['Status'] || '').trim().toLowerCase();
+      if (statusRaw === 'started' || statusRaw === '2') {
         data.started.push(row);
-      } else if (status === 'Finished' || status === '3') {
-        data.finished.push(row);
+      } else {
+        data.pending.push(row);
       }
     });
 
     data.started.sort((a, b) => (b['เวลาทำรายการ'] || '').localeCompare(a['เวลาทำรายการ'] || ''));
-    data.finished.sort((a, b) => (b['Dropoff'] || b['เวลาทำรายการ'] || '').localeCompare(a['Dropoff'] || a['เวลาทำรายการ'] || ''));
+    data.pending.sort((a, b) => (b['เวลาทำรายการ'] || '').localeCompare(a['เวลาทำรายการ'] || ''));
   }
 
   async function updateJobStatus(jobKey, newStatus, extraData = {}) {
@@ -113,62 +243,291 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // --- UI Rendering ---
-  function renderAllTabs() {
-    renderPendingList(data.pending);
-    renderSimpleList('started', data.started);
-    renderSimpleList('finished', data.finished);
+  async function batchUpdateStatus(keys, newStatus, extraData = {}) {
+    let successCount = 0;
+    let failCount = 0;
     
-    // Update Counts & Badges
+    // Send all requests in parallel for speed
+    const promises = keys.map(key => {
+      const payload = { key, status: newStatus, ...extraData };
+      return fetch('/api/jobs/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(r => r.json()).then(json => {
+        if (json.success || json.status === 'success') successCount++;
+        else failCount++;
+      }).catch(() => { failCount++; });
+    });
+
+    await Promise.all(promises);
+    
+    selectedKeys[currentTab].clear();
+    updateBatchBar();
+    
+    if (successCount > 0) showToast(`อัปเดตสำเร็จ ${successCount} รายการ`, 'success');
+    if (failCount > 0) showToast(`ล้มเหลว ${failCount} รายการ`, 'error');
+    
+    fetchData(true);
+  }
+
+  // ========================
+  // SEARCH & FILTER
+  // ========================
+  function initSearch() {
     tabs.forEach(tab => {
-      const count = data[tab].length;
-      document.getElementById(`count-${tab}`).textContent = `${count} รายการ`;
-      
-      const badge = document.getElementById(`badge-${tab}`);
-      if (count > 0 && tab !== 'finished') {
-        badge.textContent = count > 99 ? '99+' : count;
-        badge.classList.remove('hidden');
-      } else {
-        badge.classList.add('hidden');
-      }
+      const input = document.getElementById(`search-${tab}`);
+      if (!input) return;
+      input.addEventListener('input', () => {
+        searchTerms[tab] = input.value.trim().toLowerCase();
+        renderTab(tab);
+      });
     });
   }
 
-  function renderPendingList(items) {
-    const listEl = document.getElementById('list-pending');
-    document.getElementById('loading-pending').classList.add('hidden');
+  function initDateFilter() {
+    const monthInput = document.getElementById('month-finished');
+    const monthClearBtn = document.getElementById('month-clear-finished');
+    const loadMoreBtn = document.getElementById('load-more-finished');
+    if (!monthInput) return;
+
+    // Default to current month
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    finishedMonth = `${now.getFullYear()}-${mm}`;
+    monthInput.value = finishedMonth;
+    monthClearBtn.classList.remove('hidden');
+
+    monthInput.addEventListener('change', () => {
+      finishedMonth = monthInput.value;
+      if (finishedMonth) {
+        monthClearBtn.classList.remove('hidden');
+      } else {
+        monthClearBtn.classList.add('hidden');
+      }
+      fetchFinishedJobs(true);
+    });
+
+    monthClearBtn.addEventListener('click', () => {
+      monthInput.value = '';
+      finishedMonth = '';
+      monthClearBtn.classList.add('hidden');
+      fetchFinishedJobs(true);
+    });
+
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener('click', () => {
+        if (!isFetchingFinished && finishedHasMore) {
+          finishedPage++;
+          fetchFinishedJobs(false);
+        }
+      });
+    }
+
+    const sortSelect = document.getElementById('sort-date-pending');
+    if (sortSelect) {
+      sortSelect.addEventListener('change', () => {
+        sortOrderPending = sortSelect.value;
+        renderTab('pending');
+      });
+    }
+
+    const todayCheckbox = document.getElementById('filter-today-pending');
+    if (todayCheckbox) {
+      todayCheckbox.addEventListener('change', () => {
+        filterTodayPending = todayCheckbox.checked;
+        renderTab('pending');
+      });
+    }
+  }
+
+  function getFilteredItems(tab) {
+    let items = data[tab];
+    const term = searchTerms[tab];
+    const branch = activeBranch[tab];
+
+    // Branch filter
+    if (branch) {
+      items = items.filter(item => (item['ส่งจากสาขา'] || '') === branch);
+    }
+
+    // Today filter
+    if (tab === 'pending' && filterTodayPending) {
+      const now = new Date();
+      let d = String(now.getDate()).padStart(2, '0');
+      let m = String(now.getMonth() + 1).padStart(2, '0');
+      let ceYear = now.getFullYear();
+      let thYear = ceYear + 543;
+      items = items.filter(item => {
+        const itemDate = item['วันที่ส่งเอกสาร/พัสดุ'] || '';
+        return itemDate === `${d}/${m}/${ceYear}` || itemDate === `${d}/${m}/${thYear}`;
+      });
+    }
+
+    // Search filter
+    if (term) {
+      items = items.filter(item => {
+        const searchable = [
+          item['Key'],
+          item['ชื่อผู้ส่ง'],
+          item['ชื่อผู้รับ'],
+          item['แผนก ต้นทาง'],
+          item['แผนก ปลายทาง'],
+          item['รายละเอียด'],
+          item['ส่งจากสาขา'],
+          item['วันที่ส่งเอกสาร/พัสดุ']
+        ].filter(Boolean).join(' ').toLowerCase();
+        return searchable.includes(term);
+      });
+    }
+
+    return items;
+  }
+
+  function getBranches(tab) {
+    const branches = new Set();
+    data[tab].forEach(item => {
+      const b = (item['ส่งจากสาขา'] || '').trim();
+      if (b) branches.add(b);
+    });
+    return Array.from(branches).sort();
+  }
+
+  function renderBranchChips(tab) {
+    const container = document.getElementById(`branch-${tab}`);
+    if (!container) return;
+    const branches = getBranches(tab);
     
-    if (items.length === 0) {
+    if (branches.length <= 1) {
+      container.innerHTML = '';
+      return;
+    }
+
+    container.innerHTML = '';
+    
+    const allChip = document.createElement('span');
+    allChip.className = `branch-chip${!activeBranch[tab] ? ' active' : ''}`;
+    allChip.textContent = 'ทั้งหมด';
+    allChip.addEventListener('click', () => {
+      activeBranch[tab] = null;
+      renderBranchChips(tab);
+      renderTab(tab);
+    });
+    container.appendChild(allChip);
+
+    branches.forEach(branch => {
+      const count = data[tab].filter(i => i['ส่งจากสาขา'] === branch).length;
+      const chip = document.createElement('span');
+      chip.className = `branch-chip${activeBranch[tab] === branch ? ' active' : ''}`;
+      chip.textContent = `${branch} (${count})`;
+      chip.addEventListener('click', () => {
+        activeBranch[tab] = activeBranch[tab] === branch ? null : branch;
+        renderBranchChips(tab);
+        renderTab(tab);
+      });
+      container.appendChild(chip);
+    });
+  }
+
+  // ========================
+  // UI RENDERING
+  // ========================
+  function renderAllTabs() {
+    tabs.forEach(tab => {
+      renderBranchChips(tab);
+      renderTab(tab);
+    });
+  }
+
+  function renderTab(tab) {
+    const items = getFilteredItems(tab);
+    const totalCount = tab === 'finished' ? totalFinishedCount : data[tab].length;
+    const filteredCount = items.length;
+
+    const hasFilter = searchTerms[tab] || activeBranch[tab];
+    const countText = hasFilter
+      ? `${filteredCount}/${totalCount} รายการ`
+      : `${totalCount} รายการ`;
+    document.getElementById(`count-${tab}`).textContent = countText;
+
+    const badge = document.getElementById(`badge-${tab}`);
+    if (totalCount > 0 && tab !== 'finished') {
+      badge.textContent = totalCount > 99 ? '99+' : totalCount;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+
+    if (tab === 'pending' || tab === 'started') {
+      renderGroupedList(tab, items);
+    } else {
+      renderSimpleList(tab, items);
+    }
+  }
+
+  function renderGroupedList(tab, items) {
+    const listEl = document.getElementById(`list-${tab}`);
+    document.getElementById(`loading-${tab}`).classList.add('hidden');
+    
+    if (data[tab].length === 0) {
       listEl.innerHTML = '';
-      document.getElementById('empty-pending').classList.remove('hidden');
+      document.getElementById(`empty-${tab}`).classList.remove('hidden');
       return;
     }
     
-    document.getElementById('empty-pending').classList.add('hidden');
+    document.getElementById(`empty-${tab}`).classList.add('hidden');
     listEl.innerHTML = '';
 
-    // Group by Date, then by Dept
+    if (items.length === 0) {
+      listEl.innerHTML = '<div class="no-results"><i class="no-results-icon bx bx-search"></i><p>ไม่พบรายการที่ค้นหา</p></div>';
+      return;
+    }
+
     const groups = {};
     items.forEach(item => {
       const date = item['วันที่ส่งเอกสาร/พัสดุ'] || 'ไม่ระบุวันที่';
-      const dept = item['แผนก ต้นทาง'] || 'ไม่ระบุแผนก';
+      const dept = tab === 'started' ? (item['แผนก ปลายทาง'] || 'ไม่ระบุแผนก') : (item['แผนก ต้นทาง'] || 'ไม่ระบุแผนก');
       if (!groups[date]) groups[date] = {};
       if (!groups[date][dept]) groups[date][dept] = [];
       groups[date][dept].push(item);
     });
 
-    const dates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
-    
+    const parseDateToISO = (dateStr) => {
+      if (!dateStr || dateStr === 'ไม่ระบุวันที่') return '0000-00-00';
+      const m = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (m) {
+        let yr = parseInt(m[3]);
+        if (yr > 2500) yr -= 543;
+        return `${yr}-${m[2]}-${m[1]}`;
+      }
+      return dateStr;
+    };
+
+    const dates = Object.keys(groups).sort((a, b) => {
+      const dateA = parseDateToISO(a);
+      const dateB = parseDateToISO(b);
+      if (tab === 'pending') {
+        if (sortOrderPending === 'desc') return dateB.localeCompare(dateA);
+        return dateA.localeCompare(dateB);
+      }
+      return dateB.localeCompare(dateA); // Default DESC for started
+    });
+
     dates.forEach(date => {
+      const dateHeader = document.createElement('div');
+      dateHeader.className = 'group-date-header';
+      dateHeader.innerHTML = date === 'ไม่ระบุวันที่' ? date : `<i class="bx bx-calendar-event"></i> ${date}`;
+      listEl.appendChild(dateHeader);
+
       const depts = Object.keys(groups[date]).sort();
       depts.forEach(dept => {
-        const groupEl = document.createElement('div');
-        groupEl.className = 'group-header';
-        groupEl.textContent = `${date} • ${dept} (${groups[date][dept].length})`;
-        listEl.appendChild(groupEl);
+        const deptHeader = document.createElement('div');
+        deptHeader.className = 'group-dept-header';
+        deptHeader.textContent = `${dept} (${groups[date][dept].length})`;
+        listEl.appendChild(deptHeader);
         
         groups[date][dept].forEach(job => {
-          listEl.appendChild(createJobCard(job, 'pending'));
+          listEl.appendChild(createJobCard(job, tab));
         });
       });
     });
@@ -178,7 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const listEl = document.getElementById(`list-${tab}`);
     document.getElementById(`loading-${tab}`).classList.add('hidden');
     
-    if (items.length === 0) {
+    if (data[tab].length === 0) {
       listEl.innerHTML = '';
       document.getElementById(`empty-${tab}`).classList.remove('hidden');
       return;
@@ -186,6 +545,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById(`empty-${tab}`).classList.add('hidden');
     listEl.innerHTML = '';
+
+    if (items.length === 0) {
+      listEl.innerHTML = '<div class="no-results"><i class="no-results-icon bx bx-search"></i><p>ไม่พบรายการที่ค้นหา</p></div>';
+      return;
+    }
     
     items.forEach(job => {
       listEl.appendChild(createJobCard(job, tab));
@@ -195,10 +559,15 @@ document.addEventListener('DOMContentLoaded', () => {
   function createJobCard(job, type) {
     const card = document.createElement('div');
     card.className = 'job-card';
+    const key = job.Key;
+    const isSelected = selectedKeys[type].has(key);
+    if (isSelected) card.classList.add('selected');
     
     const sender = job['ชื่อผู้ส่ง'] || '-';
     const receiver = job['ชื่อผู้รับ'] || '-';
     const qty = job['จำนวน'] || '1';
+    const branch = job['ส่งจากสาขา'] || '';
+    const sigUrl = job['Txt_01'] || job['Dropoff Signature'] || '';
     
     let infoHtml = '';
     if (type === 'pending' || type === 'started') {
@@ -207,10 +576,10 @@ document.addEventListener('DOMContentLoaded', () => {
           <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
           <div class="info-text">
             <div class="user-name">จาก: ${sender}</div>
-            <div class="dept-name">${job['แผนก ต้นทาง'] || ''} ${job['ส่งจากสาขา'] ? `(${job['ส่งจากสาขา']})` : ''}</div>
+            <div class="dept-name">${job['แผนก ต้นทาง'] || ''}</div>
           </div>
         </div>
-        <div class="info-row mt-2">
+        <div class="info-row">
           <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
           <div class="info-text">
             <div class="user-name">ถึง: ${receiver}</div>
@@ -219,21 +588,36 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
     } else {
+      // Finished: show both sender AND receiver
       infoHtml = `
+        <div class="info-row">
+          <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <div class="info-text">
+            <div class="user-name">จาก: ${sender}</div>
+            <div class="dept-name">${job['แผนก ต้นทาง'] || ''}</div>
+          </div>
+        </div>
         <div class="info-row">
           <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           <div class="info-text">
             <div class="user-name">ผู้รับ: ${receiver}</div>
-            <div class="dept-name">เวลา: ${job['Dropoff'] || job['เวลาทำรายการ'] || '-'}</div>
+            <div class="dept-name">เวลารับ: ${job['Dropoff'] || job['เวลาทำรายการ'] || '-'}</div>
           </div>
         </div>
       `;
     }
 
+    const statusPill = type === 'pending' ? '<span class="status-pill status-pending">รอรับ</span>' :
+      type === 'started' ? '<span class="status-pill status-started">นำส่ง</span>' :
+      '<span class="status-pill status-finished">รับแล้ว</span>';
+
     card.innerHTML = `
       <div class="card-top">
-        <span class="card-key">${job.Key}</span>
-        <span class="card-time">${job['เวลาทำรายการ'] ? job['เวลาทำรายการ'].split(' ')[0] : ''}</span>
+        <div class="card-left">
+          ${type !== 'finished' ? `<input type="checkbox" class="card-checkbox" data-key="${key}" ${isSelected ? 'checked' : ''} />` : ''}
+          <span class="card-key">${key}</span>
+        </div>
+        <span class="card-time">${job['เวลาทำรายการ'] || ''}</span>
       </div>
       <div class="card-body">
         ${infoHtml}
@@ -243,26 +627,255 @@ document.addEventListener('DOMContentLoaded', () => {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
           พัสดุ: <strong>${qty}</strong>
         </div>
-        ${type === 'pending' ? '<span class="status-pill status-pending">รอรับ</span>' : 
-          type === 'started' ? '<span class="status-pill status-started">นำส่ง</span>' : 
-          '<span class="status-pill status-finished">รับแล้ว</span>'}
+        ${branch ? `<span class="branch-tag">${branch}</span>` : ''}
+        ${statusPill}
       </div>
+      ${type === 'finished' && sigUrl && sigUrl.startsWith('http') ? `
+        <div class="sig-preview-wrap" data-sig-url="${sigUrl}" data-receiver="${receiver}">
+          <img class="sig-preview-img" src="${sigUrl}" alt="ลายเซ็น" loading="lazy" onerror="this.parentElement.style.display='none'" />
+          <span class="sig-preview-text"><i class="bx bx-edit-alt"></i> ลายเซ็นผู้รับ — กดเพื่อดู</span>
+        </div>
+      ` : ''}
     `;
 
-    card.addEventListener('click', () => openJobModal(job, type));
+    // Signature preview click (for finished cards)
+    const sigPreview = card.querySelector('.sig-preview-wrap');
+    if (sigPreview) {
+      sigPreview.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showSignatureViewer(sigPreview.dataset.sigUrl, sigPreview.dataset.receiver);
+      });
+    }
+
+    // Selection only for pending & started
+    if (type !== 'finished') {
+      const checkbox = card.querySelector('.card-checkbox');
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.sig-preview-wrap')) return;
+        if (!e.target.classList.contains('card-checkbox')) {
+          checkbox.checked = !checkbox.checked;
+        }
+        if (checkbox.checked) {
+          selectedKeys[type].add(key);
+          card.classList.add('selected');
+        } else {
+          selectedKeys[type].delete(key);
+          card.classList.remove('selected');
+        }
+        updateBatchBar();
+      });
+    }
+
     return card;
   }
 
-  // --- Modal Logic ---
+  // ========================
+  // SIGNATURE VIEWER (full screen)
+  // ========================
+  function createSignatureViewer() {
+    sigViewer = document.createElement('div');
+    sigViewer.className = 'sig-viewer-overlay';
+    sigViewer.innerHTML = `
+      <img class="sig-viewer-img" id="sigViewerImg" src="" alt="ลายเซ็น" />
+      <div class="sig-viewer-label" id="sigViewerLabel"></div>
+    `;
+    document.body.appendChild(sigViewer);
+    sigViewer.addEventListener('click', () => sigViewer.classList.remove('active'));
+  }
+
+  function showSignatureViewer(url, receiverName) {
+    const img = document.getElementById('sigViewerImg');
+    const label = document.getElementById('sigViewerLabel');
+    img.src = url;
+    label.textContent = `ลายเซ็นผู้รับ: ${receiverName}`;
+    sigViewer.classList.add('active');
+  }
+
+  // ========================
+  // BATCH ACTIONS
+  // ========================
+  function initBatchHandlers() {
+    batchCancelBtn.addEventListener('click', () => {
+      selectedKeys[currentTab].clear();
+      updateBatchBar();
+      renderTab(currentTab);
+    });
+
+    batchConfirmBtn.addEventListener('click', () => {
+      const keys = Array.from(selectedKeys[currentTab]);
+      if (keys.length === 0) return;
+
+      if (currentTab === 'pending') {
+        batchConfirmBtn.disabled = true;
+        batchConfirmLabel.textContent = 'กำลังบันทึก...';
+        batchUpdateStatus(keys, 'Started').finally(() => {
+          batchConfirmBtn.disabled = false;
+          batchConfirmLabel.textContent = 'รับเข้าระบบ';
+        });
+      } else if (currentTab === 'started') {
+        // Open batch signature modal for signing
+        openBatchSigModal(keys);
+      }
+    });
+  }
+
+  function updateBatchBar() {
+    const count = selectedKeys[currentTab].size;
+    if (count > 0 && currentTab !== 'finished') {
+      batchBar.classList.remove('hidden');
+      batchCount.textContent = count;
+      
+      if (currentTab === 'pending') {
+        batchConfirmLabel.textContent = 'รับเข้าระบบ';
+        batchConfirmBtn.className = 'batch-btn batch-confirm';
+      } else if (currentTab === 'started') {
+        batchConfirmLabel.textContent = 'ยืนยันส่งมอบ';
+        batchConfirmBtn.className = 'batch-btn batch-confirm started-action';
+      }
+    } else {
+      batchBar.classList.add('hidden');
+    }
+  }
+
+  // ========================
+  // BATCH SIGNATURE MODAL
+  // ========================
+  let pendingBatchKeys = [];
+
+  function initBatchSigModal() {
+    batchSigCloseBtn.addEventListener('click', closeBatchSigModal);
+    batchSigOverlay.addEventListener('click', e => {
+      if (e.target === batchSigOverlay) closeBatchSigModal();
+    });
+
+    batchSigClearBtn.addEventListener('click', clearBatchSig);
+
+    batchSigConfirmBtn.addEventListener('click', async () => {
+      if (!bHasSignature) {
+        showToast('กรุณาเซ็นชื่อรับเอกสาร', 'error');
+        return;
+      }
+      
+      batchSigConfirmBtn.disabled = true;
+      batchSigConfirmLabel.textContent = 'กำลังบันทึก...';
+      
+      const sigBase64 = bCanvas.toDataURL('image/png');
+      const now = new Date().toLocaleString('th-TH');
+      
+      await batchUpdateStatus(pendingBatchKeys, 'Finished', {
+        signature: sigBase64,
+        dropoff: now
+      });
+      
+      closeBatchSigModal();
+      batchSigConfirmBtn.disabled = false;
+      batchSigConfirmLabel.textContent = 'ยืนยันส่งมอบ';
+    });
+
+    // Init batch sig canvas
+    bCanvas = document.getElementById('batchSigCanvas');
+    if (bCanvas) {
+      bCtx = bCanvas.getContext('2d', { willReadFrequently: true });
+
+      bCanvas.addEventListener('mousedown', bStartDrawing);
+      bCanvas.addEventListener('mousemove', bDraw);
+      bCanvas.addEventListener('mouseup', bStopDrawing);
+      bCanvas.addEventListener('mouseout', bStopDrawing);
+
+      bCanvas.addEventListener('touchstart', bHandleTouch, { passive: false });
+      bCanvas.addEventListener('touchmove', bHandleTouch, { passive: false });
+      bCanvas.addEventListener('touchend', bStopDrawing);
+    }
+  }
+
+  function openBatchSigModal(keys) {
+    pendingBatchKeys = keys;
+    batchSigInfo.textContent = `กำลังยืนยัน ${keys.length} รายการ`;
+    clearBatchSig();
+    batchSigOverlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    
+    // Resize canvas after modal is visible
+    setTimeout(() => resizeBatchCanvas(), 100);
+  }
+
+  function closeBatchSigModal() {
+    batchSigOverlay.classList.remove('active');
+    document.body.style.overflow = 'auto';
+    pendingBatchKeys = [];
+  }
+
+  function clearBatchSig() {
+    if (!bCanvas || !bCtx) return;
+    resizeBatchCanvas();
+    bHasSignature = false;
+    const ph = document.getElementById('batchSigPlaceholder');
+    if (ph) ph.style.opacity = '1';
+  }
+
+  function resizeBatchCanvas() {
+    if (!bCanvas) return;
+    const wrap = bCanvas.parentElement;
+    const rect = wrap.getBoundingClientRect();
+    bCanvas.width = rect.width;
+    bCanvas.height = rect.height;
+    bCtx.fillStyle = '#fff';
+    bCtx.fillRect(0, 0, bCanvas.width, bCanvas.height);
+  }
+
+  function bHandleTouch(e) {
+    if (e.type !== 'touchend') e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent(e.type === 'touchstart' ? 'mousedown' : 'mousemove', {
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    });
+    bCanvas.dispatchEvent(mouseEvent);
+  }
+
+  function bStartDrawing(e) {
+    bIsDrawing = true;
+    const rect = bCanvas.getBoundingClientRect();
+    bLastX = e.clientX - rect.left;
+    bLastY = e.clientY - rect.top;
+    if (!bHasSignature) {
+      const ph = document.getElementById('batchSigPlaceholder');
+      if (ph) ph.style.opacity = '0';
+      bHasSignature = true;
+    }
+  }
+
+  function bDraw(e) {
+    if (!bIsDrawing) return;
+    const rect = bCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    bCtx.beginPath();
+    bCtx.moveTo(bLastX, bLastY);
+    bCtx.lineTo(x, y);
+    bCtx.strokeStyle = '#000';
+    bCtx.lineWidth = 3;
+    bCtx.lineCap = 'round';
+    bCtx.lineJoin = 'round';
+    bCtx.stroke();
+    bLastX = x;
+    bLastY = y;
+  }
+
+  function bStopDrawing() { bIsDrawing = false; }
+
+  // ========================
+  // MODAL (single item)
+  // ========================
   function openJobModal(job, type) {
     activeJob = job;
     const grid = document.getElementById('modalDetailGrid');
     
-    // Setup Content
     const details = [
       { label: 'รหัสเอกสาร', val: job.Key },
       { label: 'ผู้ส่ง / ต้นทาง', val: `${job['ชื่อผู้ส่ง'] || '-'} (${job['แผนก ต้นทาง'] || '-'})` },
       { label: 'ผู้รับ / ปลายทาง', val: `${job['ชื่อผู้รับ'] || '-'} (${job['แผนก ปลายทาง'] || '-'})` },
+      { label: 'สาขา', val: job['ส่งจากสาขา'] || '-' },
       { label: 'รายละเอียด', val: job['รายละเอียด'] || '-' },
       { label: 'จำนวน', val: job['จำนวน'] || '1' },
       { label: 'เวลาทำรายการ', val: job['เวลาทำรายการ'] || '-' }
@@ -280,7 +893,6 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `).join('');
 
-    // Configure specific sections based on type
     const sigSection = document.getElementById('sigSection');
     const remarkSection = document.getElementById('remarkSection');
     const footer = document.getElementById('modalFooter');
@@ -304,20 +916,19 @@ document.addEventListener('DOMContentLoaded', () => {
       clearSignature();
     } else if (type === 'finished') {
       document.getElementById('modalTitle').textContent = 'รายละเอียดการรับ';
-      footer.style.display = 'none'; // No action needed for finished
+      footer.style.display = 'none';
       
-      // Show signature if exists
-      if (job['Dropoff Signature']) {
+      const sigUrl = job['Txt_01'] || job['Dropoff Signature'] || '';
+      if (sigUrl && sigUrl.startsWith('http')) {
         sigSection.style.display = 'flex';
-        // Need to render image instead of canvas
         const wrap = document.getElementById('sigCanvasWrap');
-        wrap.innerHTML = `<img src="${job['Dropoff Signature'].startsWith('data:') ? job['Dropoff Signature'] : 'data:image/png;base64,' + job['Dropoff Signature']}" style="width:100%; height:100%; object-fit:contain; background:white;">`;
+        wrap.innerHTML = `<img src="${sigUrl}" style="width:100%; height:100%; object-fit:contain; background:white; cursor:pointer;" onclick="document.getElementById('sigViewerImg').src='${sigUrl}'; document.getElementById('sigViewerLabel').textContent='ลายเซ็นผู้รับ: ${job['ชื่อผู้รับ'] || ''}'; document.querySelector('.sig-viewer-overlay').classList.add('active');">`;
         document.getElementById('sigClearBtn').style.display = 'none';
       }
     }
 
     modalOverlay.classList.add('active');
-    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    document.body.style.overflow = 'hidden';
     
     if (type === 'started') resizeCanvas();
   }
@@ -327,7 +938,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.style.overflow = 'auto';
     activeJob = null;
     
-    // Restore canvas HTML if overridden by finished state
     const wrap = document.getElementById('sigCanvasWrap');
     if (wrap.querySelector('img')) {
       wrap.innerHTML = `
@@ -338,7 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
       document.getElementById('sigClearBtn').style.display = 'block';
-      initSignaturePad(); // Rebind events
+      initSignaturePad();
     }
   }
 
@@ -352,7 +962,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!activeJob) return;
       
       if (currentTab === 'pending') {
-        updateJobStatus(activeJob.Key, 'Started'); // Move to step 2
+        updateJobStatus(activeJob.Key, 'Started');
       } else if (currentTab === 'started') {
         if (!hasSignature) {
           showToast('กรุณาเซ็นชื่อรับเอกสาร', 'error');
@@ -372,13 +982,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- Signature Logic ---
-  let canvas, ctx;
-  let isDrawing = false;
-  let hasSignature = false;
-  let lastX = 0;
-  let lastY = 0;
-
+  // ========================
+  // SIGNATURE (main modal)
+  // ========================
   function initSignaturePad() {
     canvas = document.getElementById('sigCanvas');
     if (!canvas) return;
@@ -386,13 +992,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('sigClearBtn').addEventListener('click', clearSignature);
 
-    // Mouse Events
     canvas.addEventListener('mousedown', startDrawing);
     canvas.addEventListener('mousemove', draw);
     canvas.addEventListener('mouseup', stopDrawing);
     canvas.addEventListener('mouseout', stopDrawing);
 
-    // Touch Events
     canvas.addEventListener('touchstart', handleTouch, { passive: false });
     canvas.addEventListener('touchmove', handleTouch, { passive: false });
     canvas.addEventListener('touchend', stopDrawing);
@@ -415,7 +1019,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const rect = canvas.getBoundingClientRect();
     lastX = e.clientX - rect.left;
     lastY = e.clientY - rect.top;
-    
     if (!hasSignature) {
       document.getElementById('sigPlaceholder').style.opacity = '0';
       hasSignature = true;
@@ -427,7 +1030,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-
     ctx.beginPath();
     ctx.moveTo(lastX, lastY);
     ctx.lineTo(x, y);
@@ -436,28 +1038,24 @@ document.addEventListener('DOMContentLoaded', () => {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.stroke();
-
     lastX = x;
     lastY = y;
   }
 
-  function stopDrawing() {
-    isDrawing = false;
-  }
+  function stopDrawing() { isDrawing = false; }
 
   function clearSignature() {
     if (!canvas) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     hasSignature = false;
     const placeholder = document.getElementById('sigPlaceholder');
-    if(placeholder) placeholder.style.opacity = '1';
+    if (placeholder) placeholder.style.opacity = '1';
   }
 
   function getSignatureData() {
-    // Return base64 without prefix if needed, or keep prefix based on backend requirements
-    // Here we strip prefix to save space, but you can adjust if needed
-    const dataUrl = canvas.toDataURL('image/png');
-    return dataUrl; // data:image/png;base64,....
+    return canvas.toDataURL('image/png');
   }
 
   function resizeCanvas() {
@@ -465,7 +1063,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const wrap = canvas.parentElement;
     const rect = wrap.getBoundingClientRect();
     
-    // Save image
     let temp = null;
     if (hasSignature) {
       temp = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -473,28 +1070,21 @@ document.addEventListener('DOMContentLoaded', () => {
     
     canvas.width = rect.width;
     canvas.height = rect.height;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Provide white background
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    
-    // Restore
-    if (temp) {
-      ctx.putImageData(temp, 0, 0);
-    } else {
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0,0,canvas.width,canvas.height);
-    }
+    if (temp) ctx.putImageData(temp, 0, 0);
   }
 
-  // --- Navigation ---
+  // ========================
+  // NAVIGATION
+  // ========================
   function initTabs() {
     navBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         const target = btn.dataset.panel;
         if (target === currentTab) return;
         
-        // Update UI
         navBtns.forEach(b => {
           b.classList.remove('active');
           b.setAttribute('aria-selected', 'false');
@@ -511,12 +1101,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         currentTab = target;
+        updateBatchBar();
         window.scrollTo(0, 0);
       });
     });
   }
 
-  // --- Toasts ---
+  // ========================
+  // TOASTS
+  // ========================
   function showToast(message, type = 'success') {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
@@ -526,11 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
       '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-emerald)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' :
       '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-red)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
       
-    toast.innerHTML = `
-      ${icon}
-      <span>${message}</span>
-    `;
-    
+    toast.innerHTML = `${icon}<span>${message}</span>`;
     container.appendChild(toast);
     
     setTimeout(() => {
