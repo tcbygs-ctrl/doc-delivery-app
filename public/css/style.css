@@ -984,6 +984,33 @@ h3 {
   font-weight: 500;
 }
 
+.batch-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent-blue);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.batch-qty.hidden {
+  display: none;
+}
+
+.batch-qty i {
+  font-size: 14px;
+}
+
+.batch-qty strong {
+  font-weight: 800;
+  font-size: 13px;
+}
+
 .batch-actions {
   display: flex;
   gap: 8px;
