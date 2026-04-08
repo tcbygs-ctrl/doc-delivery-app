@@ -374,7 +374,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    box.innerHTML = matches.map(m => {
+    const headerHtml =
+      '<div class="suggestions-header">' +
+      '<span><i class="bx bx-list-ul"></i> ตัวเลือกที่พบ</span>' +
+      '<span>' + matches.length + ' รายการ</span>' +
+      '</div>';
+
+    box.innerHTML = headerHtml + matches.map(m => {
       const sender = escapeHtml(m.item['ชื่อผู้ส่ง'] || '-');
       const receiver = escapeHtml(m.item['ชื่อผู้รับ'] || '-');
       const branch = escapeHtml(m.item['ส่งจากสาขา'] || '');
