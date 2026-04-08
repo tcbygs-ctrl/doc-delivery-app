@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updatePresenceIcons() {
-    document.querySelectorAll('.card[data-key]').forEach(card => {
+    document.querySelectorAll('.job-card[data-key]').forEach(card => {
       const k = card.getAttribute('data-key');
       const left = card.querySelector('.card-left');
       if (!left) return;
