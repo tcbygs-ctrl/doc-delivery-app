@@ -437,6 +437,75 @@ h3 {
   margin-top: 2px;
 }
 
+/* ====== PRESENCE LOCK ====== */
+.presence-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: var(--accent-amber, #f59e0b);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 4px;
+  animation: presencePulse 2s ease-in-out infinite;
+}
+
+.presence-lock i {
+  font-size: 14px;
+}
+
+.presence-name {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes presencePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
+}
+
+.job-card.is-locked {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: linear-gradient(0deg, rgba(245, 158, 11, 0.04), rgba(245, 158, 11, 0.04));
+}
+
+/* ====== CONFLICT TOAST ====== */
+.conflict-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 24px);
+  transform: translateX(-50%) translateY(20px);
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 12px 32px rgba(220, 38, 38, 0.4);
+  z-index: 10000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+}
+
+.conflict-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.conflict-toast i {
+  font-size: 18px;
+}
+
 .suggestion-key {
   font-size: 10px;
   font-weight: 700;
