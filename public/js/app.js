@@ -65,6 +65,75 @@ document.addEventListener('DOMContentLoaded', () => {
   // Signature Viewer
   let sigViewer;
 
+  // === Presence (multi-user lock) ===
+  let userId = localStorage.getItem('docDelivery_userId');
+  if (!userId) {
+    userId = 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    localStorage.setItem('docDelivery_userId', userId);
+  }
+  const displayName = localStorage.getItem('docDelivery_displayName') || ('ผู้ใช้-' + userId.slice(-4));
+  let othersPresence = {}; // { key: { userId, name } }
+  let viewingKey = null;   // key being viewed in modal (also claimed)
+
+  function getMyClaims() {
+    const claims = new Set();
+    selectedKeys.pending.forEach(k => claims.add(k));
+    selectedKeys.started.forEach(k => claims.add(k));
+    if (viewingKey) claims.add(viewingKey);
+    return Array.from(claims);
+  }
+
+  async function sendHeartbeat() {
+    try {
+      const res = await fetch('/api/presence/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, name: displayName, claims: getMyClaims() })
+      });
+      const json = await res.json();
+      if (json.success) {
+        const prev = JSON.stringify(othersPresence);
+        othersPresence = json.others || {};
+        if (prev !== JSON.stringify(othersPresence)) {
+          updatePresenceIcons();
+        }
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  function updatePresenceIcons() {
+    document.querySelectorAll('.card[data-key]').forEach(card => {
+      const k = card.getAttribute('data-key');
+      const left = card.querySelector('.card-left');
+      if (!left) return;
+      const existing = left.querySelector('.presence-lock');
+      const owner = othersPresence[k];
+      if (owner) {
+        if (!existing) {
+          const icon = document.createElement('span');
+          icon.className = 'presence-lock';
+          icon.title = 'กำลังถูกใช้งานโดย ' + owner.name;
+          icon.innerHTML = '<i class="bx bxs-user-circle"></i>';
+          left.appendChild(icon);
+        } else {
+          existing.title = 'กำลังถูกใช้งานโดย ' + owner.name;
+        }
+        card.classList.add('is-locked');
+      } else {
+        if (existing) existing.remove();
+        card.classList.remove('is-locked');
+      }
+    });
+  }
+
+  // Send on unload to release immediately
+  window.addEventListener('beforeunload', () => {
+    try {
+      const blob = new Blob([JSON.stringify({ userId, name: displayName, claims: [] })], { type: 'application/json' });
+      navigator.sendBeacon('/api/presence/heartbeat', blob);
+    } catch (_) {}
+  });
+
   // === Init ===
   initTheme();
   initTabs();
