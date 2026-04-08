@@ -109,14 +109,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const existing = left.querySelector('.presence-lock');
       const owner = othersPresence[k];
       if (owner) {
+        const html = '<i class="bx bxs-user-circle"></i><span class="presence-name">' + owner.name + '</span>';
         if (!existing) {
           const icon = document.createElement('span');
           icon.className = 'presence-lock';
           icon.title = 'กำลังถูกใช้งานโดย ' + owner.name;
-          icon.innerHTML = '<i class="bx bxs-user-circle"></i>';
+          icon.innerHTML = html;
           left.appendChild(icon);
         } else {
           existing.title = 'กำลังถูกใช้งานโดย ' + owner.name;
+          existing.innerHTML = html;
         }
         card.classList.add('is-locked');
       } else {
