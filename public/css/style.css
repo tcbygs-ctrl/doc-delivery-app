@@ -348,6 +348,93 @@ h3 {
   opacity: 0.7;
 }
 
+/* ====== SEARCH SUGGESTIONS ====== */
+.search-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--panel-bg, #0e1729);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  z-index: 50;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.search-suggestions.hidden {
+  display: none;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.suggestion-item:hover,
+.suggestion-item:focus {
+  background: rgba(59, 130, 246, 0.12);
+  outline: none;
+}
+
+.suggestion-icon {
+  font-size: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.suggestion-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.suggestion-main {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.suggestion-main mark {
+  background: rgba(59, 130, 246, 0.25);
+  color: var(--accent-blue);
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+.suggestion-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.suggestion-key {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--card-bg);
+  padding: 2px 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
 .branch-chips {
   display: flex;
   gap: 6px;
