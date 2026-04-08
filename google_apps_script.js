@@ -59,6 +59,19 @@ function doPost(e) {
       return jsonResponse({ success: false, error: 'ไม่พบข้อมูล Key ที่ระบุ' });
     }
 
+    // Cancel action (swipe-to-delete) — write note to column T (index 20)
+    if (action === 'cancel') {
+      const cancelIdx = headers.indexOf('Cancel');
+      if (cancelIdx !== -1) {
+        sheet.getRange(foundRow, cancelIdx + 1).setValue('Yes');
+      } else {
+        sheet.getRange(foundRow, statusIdx + 1).setValue('Cancelled');
+      }
+      // Column T = 20 (1-based)
+      sheet.getRange(foundRow, 20).setValue(note || '');
+      return jsonResponse({ success: true, message: 'ลบรายการเรียบร้อย' });
+    }
+
     // Update status
     sheet.getRange(foundRow, statusIdx + 1).setValue(newStatus);
 
