@@ -1039,6 +1039,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (count > 0 && currentTab !== 'finished') {
       batchBar.classList.remove('hidden');
       batchCount.textContent = count;
+
+      // Sum QTY (column E = index 4) of selected items
+      let totalQty = 0;
+      data[currentTab].forEach(item => {
+        if (selectedKeys[currentTab].has(item.Key)) {
+          const raw = item['จำนวน'] != null && item['จำนวน'] !== ''
+            ? item['จำนวน']
+            : Object.values(item)[4];
+          const n = parseInt(String(raw).replace(/[^\d-]/g, ''), 10);
+          if (!isNaN(n)) totalQty += n;
+        }
+      });
+      const qtyEl = document.getElementById('batchQty');
+      const qtyVal = document.getElementById('batchQtyValue');
+      if (qtyEl && qtyVal) {
+        qtyVal.textContent = totalQty;
+        qtyEl.classList.toggle('hidden', totalQty <= 0);
+      }
       
       if (currentTab === 'pending') {
         batchConfirmLabel.textContent = 'รับเข้าระบบ';
