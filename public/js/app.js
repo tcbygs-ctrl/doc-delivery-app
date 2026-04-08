@@ -1196,7 +1196,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     modalOverlay.classList.add('active');
     document.body.style.overflow = 'hidden';
-    
+    viewingKey = job && job.Key ? job.Key : null;
+    sendHeartbeat();
+
     if (type === 'started') resizeCanvas();
   }
 
@@ -1204,6 +1206,8 @@ document.addEventListener('DOMContentLoaded', () => {
     modalOverlay.classList.remove('active');
     document.body.style.overflow = 'auto';
     activeJob = null;
+    viewingKey = null;
+    sendHeartbeat();
     
     const wrap = document.getElementById('sigCanvasWrap');
     if (wrap.querySelector('img')) {
