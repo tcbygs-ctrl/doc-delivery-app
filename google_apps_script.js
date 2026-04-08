@@ -20,6 +20,8 @@ function doPost(e) {
     const signature = data.signature; // base64 image data
     const dropoff = data.dropoff;
     const remark = data.remark;
+    const action = data.action; // 'cancel' for swipe-to-delete
+    const note = data.note;     // หมายเหตุ → คอลัมน์ T
 
     if (!key) {
       return jsonResponse({ success: false, error: 'ไม่ได้ระบุ Key' });
