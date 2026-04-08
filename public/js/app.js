@@ -1220,7 +1220,7 @@ document.addEventListener('DOMContentLoaded', () => {
       '<div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#dc2626,#b91c1c);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;"><i class="bx bx-trash"></i></div>' +
       '<div style="flex:1;"><div style="font-weight:700;font-size:16px;">ลบรายการ ' + key + '</div>' +
       '<div style="font-size:12px;color:var(--text-muted,#94a3b8);">กรุณาระบุเหตุผลการลบ</div></div></div>' +
-      '<textarea id="delete-note" rows="3" placeholder="หมายเหตุ (จำเป็น)" style="width:100%;padding:10px;border:1px solid var(--border,#1f2937);background:var(--card-bg,#0a1220);color:var(--text-main,#fff);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;outline:none;box-sizing:border-box;"></textarea>' +
+      '<textarea id="delete-note" rows="3" placeholder="หมายเหตุ (จำเป็น)" style="width:100%;padding:10px;border:1px solid var(--border,#1f2937);background:var(--card-bg,#0a1220);color:var(--text-main,#fff);border-radius:10px;font-family:inherit;font-size:16px;resize:vertical;outline:none;box-sizing:border-box;"></textarea>' +
       '<div style="display:flex;gap:8px;margin-top:14px;">' +
       '<button id="del-cancel" style="flex:1;padding:10px;border:1px solid var(--border,#1f2937);background:transparent;color:var(--text-main,#fff);border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
       '<button id="del-confirm" style="flex:1;padding:10px;border:none;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit;">ยืนยันลบ</button>' +
