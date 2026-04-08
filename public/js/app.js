@@ -614,6 +614,8 @@ document.addEventListener('DOMContentLoaded', () => {
       '<span class="status-pill status-finished">รับแล้ว</span>';
 
     card.innerHTML = `
+      ${type !== 'finished' ? '<button class="card-delete-bg" type="button" aria-label="ลบรายการ"><i class="bx bx-trash"></i><span>ลบ</span></button>' : ''}
+      <div class="card-content">
       <div class="card-top">
         <div class="card-left">
           ${type !== 'finished' ? `<input type="checkbox" class="card-checkbox" data-key="${key}" ${isSelected ? 'checked' : ''} />` : ''}
