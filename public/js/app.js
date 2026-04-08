@@ -1140,6 +1140,134 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 3000);
   }
 
+  // ====== Swipe to delete (mobile/tablet) ======
+  function enableSwipeDelete(card, key) {
+    const isTouch = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (!isTouch) return;
+
+    const content = card.querySelector('.card-content');
+    const deleteBtn = card.querySelector('.card-delete-bg');
+    if (!content || !deleteBtn) return;
+
+    const REVEAL = 88;
+    const THRESHOLD = 40;
+    let startX = 0;
+    let startY = 0;
+    let dx = 0;
+    let dragging = false;
+    let locked = null;
+
+    content.addEventListener('touchstart', (e) => {
+      const t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      dx = 0;
+      dragging = true;
+      locked = null;
+      card.classList.add('swiping');
+    }, { passive: true });
+
+    content.addEventListener('touchmove', (e) => {
+      if (!dragging) return;
+      const t = e.touches[0];
+      const mx = t.clientX - startX;
+      const my = t.clientY - startY;
+      if (locked === null) {
+        if (Math.abs(mx) > 8 || Math.abs(my) > 8) {
+          locked = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
+        }
+      }
+      if (locked !== 'x') return;
+      dx = Math.min(0, mx);
+      if (dx < -REVEAL) dx = -REVEAL + (dx + REVEAL) * 0.2;
+      content.style.transform = 'translateX(' + dx + 'px)';
+    }, { passive: true });
+
+    content.addEventListener('touchend', () => {
+      if (!dragging) return;
+      dragging = false;
+      card.classList.remove('swiping');
+      content.style.transform = '';
+      if (dx < -THRESHOLD) {
+        card.classList.add('swipe-revealed');
+      } else {
+        card.classList.remove('swipe-revealed');
+      }
+    });
+
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showDeleteDialog(key, card);
+    });
+  }
+
+  function showDeleteDialog(key, card) {
+    if (document.getElementById('delete-dialog')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'delete-dialog';
+    overlay.style.cssText =
+      'position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);' +
+      '-webkit-backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;' +
+      'justify-content:center;padding:16px;';
+
+    const box = document.createElement('div');
+    box.style.cssText =
+      'background:var(--panel-bg,#0e1729);color:var(--text-main,#fff);border:1px solid var(--border,#1f2937);' +
+      'border-radius:16px;padding:20px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);';
+
+    box.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
+      '<div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#dc2626,#b91c1c);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;"><i class="bx bx-trash"></i></div>' +
+      '<div style="flex:1;"><div style="font-weight:700;font-size:16px;">ลบรายการ ' + key + '</div>' +
+      '<div style="font-size:12px;color:var(--text-muted,#94a3b8);">กรุณาระบุเหตุผลการลบ</div></div></div>' +
+      '<textarea id="delete-note" rows="3" placeholder="หมายเหตุ (จำเป็น)" style="width:100%;padding:10px;border:1px solid var(--border,#1f2937);background:var(--card-bg,#0a1220);color:var(--text-main,#fff);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;outline:none;box-sizing:border-box;"></textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:14px;">' +
+      '<button id="del-cancel" style="flex:1;padding:10px;border:1px solid var(--border,#1f2937);background:transparent;color:var(--text-main,#fff);border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
+      '<button id="del-confirm" style="flex:1;padding:10px;border:none;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit;">ยืนยันลบ</button>' +
+      '</div>';
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    setTimeout(() => document.getElementById('delete-note').focus(), 50);
+
+    const close = () => overlay.remove();
+    document.getElementById('del-cancel').onclick = () => {
+      close();
+      card.classList.remove('swipe-revealed');
+    };
+    document.getElementById('del-confirm').onclick = async () => {
+      const note = document.getElementById('delete-note').value.trim();
+      if (!note) {
+        document.getElementById('delete-note').style.borderColor = '#dc2626';
+        return;
+      }
+      const btn = document.getElementById('del-confirm');
+      btn.disabled = true;
+      btn.textContent = 'กำลังลบ...';
+      try {
+        const res = await fetch('/api/jobs/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, action: 'cancel', note })
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'ลบไม่สำเร็จ');
+        close();
+        card.style.transition = 'opacity 0.3s, transform 0.3s';
+        card.style.opacity = '0';
+        card.style.transform = 'translateX(-100%)';
+        setTimeout(() => {
+          card.remove();
+          fetchData(true);
+        }, 300);
+      } catch (err) {
+        alert('ลบไม่สำเร็จ: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = 'ยืนยันลบ';
+      }
+    };
+  }
+
   // ====== PWA: register service worker (required for install prompt) ======
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch((err) => {
