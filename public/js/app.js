@@ -558,10 +558,16 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus
       btn.addEventListener('click', () => {
         const value = btn.getAttribute('data-value');
-        input.value = value;
-        searchTerms[tab] = value.toLowerCase();
+        // Add as tag chip (avoid duplicates)
+        if (!searchTags[tab].includes(value)) {
+          searchTags[tab].push(value);
+        }
+        input.value = '';
+        searchTerms[tab] = '';
+        renderSearchTags(tab);
         hideSuggestions(tab);
         renderTab(tab);
+        input.focus();
       });
     });
   }
