@@ -1228,9 +1228,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     overlay.appendChild(box);
     document.body.appendChild(overlay);
-    setTimeout(() => document.getElementById('delete-note').focus(), 50);
+    const prevBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => document.getElementById('delete-note').focus({ preventScroll: true }), 50);
 
-    const close = () => overlay.remove();
+    const close = () => {
+      document.body.style.overflow = prevBodyOverflow;
+      overlay.remove();
+    };
     document.getElementById('del-cancel').onclick = () => {
       close();
       card.classList.remove('swipe-revealed');
