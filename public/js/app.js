@@ -377,13 +377,23 @@ document.addEventListener('DOMContentLoaded', () => {
       const input = document.getElementById(`search-${tab}`);
       if (!input) return;
 
-      // Build suggestions dropdown next to input
       const wrap = input.parentElement;
-      if (wrap && !wrap.querySelector('.search-suggestions')) {
-        const sug = document.createElement('div');
-        sug.className = 'search-suggestions hidden';
-        sug.id = `suggestions-${tab}`;
-        wrap.appendChild(sug);
+      if (wrap) {
+        wrap.classList.add('has-tags');
+        // Tags container (chips) — placed before input
+        if (!wrap.querySelector('.search-tags')) {
+          const tagsEl = document.createElement('div');
+          tagsEl.className = 'search-tags';
+          tagsEl.id = `tags-${tab}`;
+          wrap.insertBefore(tagsEl, input);
+        }
+        // Suggestions dropdown
+        if (!wrap.querySelector('.search-suggestions')) {
+          const sug = document.createElement('div');
+          sug.className = 'search-suggestions hidden';
+          sug.id = `suggestions-${tab}`;
+          wrap.appendChild(sug);
+        }
       }
 
       input.addEventListener('input', () => {
@@ -400,6 +410,32 @@ document.addEventListener('DOMContentLoaded', () => {
           hideSuggestions(tab);
           input.blur();
         }
+        // Backspace on empty input removes last tag
+        if (e.key === 'Backspace' && input.value === '' && searchTags[tab].length > 0) {
+          searchTags[tab].pop();
+          renderSearchTags(tab);
+          renderTab(tab);
+        }
+      });
+    });
+  }
+
+  function renderSearchTags(tab) {
+    const el = document.getElementById(`tags-${tab}`);
+    if (!el) return;
+    el.innerHTML = searchTags[tab].map((t, i) => (
+      '<span class="search-tag" data-index="' + i + '">' +
+      '<span class="search-tag-text">' + escapeHtml(t) + '</span>' +
+      '<button type="button" class="search-tag-remove" aria-label="ลบ" data-index="' + i + '">&times;</button>' +
+      '</span>'
+    )).join('');
+    el.querySelectorAll('.search-tag-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute('data-index'), 10);
+        searchTags[tab].splice(idx, 1);
+        renderSearchTags(tab);
+        renderTab(tab);
       });
     });
   }
