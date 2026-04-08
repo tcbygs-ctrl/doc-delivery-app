@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Selection & Filter state per tab
   const selectedKeys = { pending: new Set(), started: new Set(), finished: new Set() };
   const searchTerms = { pending: '', started: '', finished: '' };
+  const searchTags = { pending: [], started: [], finished: [] };
   const activeBranch = { pending: null, started: null, finished: null };
   let finishedMonth = '';
   let finishedPage = 1;
