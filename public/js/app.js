@@ -1510,9 +1510,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch('/api/jobs/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key, action: 'cancel', note })
+          body: JSON.stringify({ key, action: 'cancel', note, _userId: userId })
         });
         const json = await res.json();
+        if (res.status === 409 || json.conflict) {
+          showConflictToast(json.error || 'รายการนี้กำลังถูกใช้งานโดยผู้ใช้งานท่านอื่น');
+          throw new Error(json.error || 'Conflict');
+        }
         if (!json.success) throw new Error(json.error || 'ลบไม่สำเร็จ');
         close();
         card.style.transition = 'opacity 0.3s, transform 0.3s';
