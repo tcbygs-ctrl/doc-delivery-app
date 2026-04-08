@@ -351,21 +351,60 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Match against current tab data (top 8 unique by Key)
-    const seen = new Set();
-    const matches = [];
-    for (const item of data[tab]) {
-      const fields = getSearchableFields(item);
-      const joined = fields.join(' ').toLowerCase();
-      if (!joined.includes(term)) continue;
-      const key = item['Key'] || '';
-      if (seen.has(key)) continue;
-      seen.add(key);
+    // Collect unique field values that match the term, grouped by field type
+    const fieldLabels = {
+      'ชื่อผู้ส่ง': 'ผู้ส่ง',
+      'ชื่อผู้รับ': 'ผู้รับ',
+      'แผนก ต้นทาง': 'แผนกต้นทาง',
+      'แผนก ปลายทาง': 'แผนกปลายทาง',
+      'ส่งจากสาขา': 'สาขา',
+      'รายละเอียด': 'รายละเอียด',
+      'Key': 'รหัส',
+      'วันที่ส่งเอกสาร/พัสดุ': 'วันที่'
+    };
+    const fieldKeys = Object.keys(fieldLabels);
 
-      // Pick the most relevant matching field for display
-      const matchField = fields.find(f => String(f).toLowerCase().includes(term)) || key;
-      matches.push({ item, key, matchField });
-      if (matches.length >= 8) break;
+    const seen = new Set(); // dedupe by "field|value"
+    const matches = [];
+    let startsWithCount = 0;
+
+    // Pass 1: starts-with matches (higher priority)
+    for (const item of data[tab]) {
+      for (const fk of fieldKeys) {
+        const val = item[fk];
+        if (!val) continue;
+        const v = String(val).trim();
+        if (!v) continue;
+        if (!v.toLowerCase().startsWith(term)) continue;
+        const id = fk + '|' + v.toLowerCase();
+        if (seen.has(id)) continue;
+        seen.add(id);
+        matches.push({ field: fk, label: fieldLabels[fk], value: v });
+        startsWithCount++;
+        if (matches.length >= 10) break;
+      }
+      if (matches.length >= 10) break;
+    }
+
+    // Pass 2: contains matches (fill remaining slots)
+    if (matches.length < 10) {
+      for (const item of data[tab]) {
+        for (const fk of fieldKeys) {
+          const val = item[fk];
+          if (!val) continue;
+          const v = String(val).trim();
+          if (!v) continue;
+          const lower = v.toLowerCase();
+          if (lower.startsWith(term)) continue; // already in pass 1
+          if (!lower.includes(term)) continue;
+          const id = fk + '|' + lower;
+          if (seen.has(id)) continue;
+          seen.add(id);
+          matches.push({ field: fk, label: fieldLabels[fk], value: v });
+          if (matches.length >= 10) break;
+        }
+        if (matches.length >= 10) break;
+      }
     }
 
     if (!matches.length) {
@@ -380,19 +419,15 @@ document.addEventListener('DOMContentLoaded', () => {
       '<span>' + matches.length + ' รายการ</span>' +
       '</div>';
 
-    box.innerHTML = headerHtml + matches.map(m => {
-      const sender = escapeHtml(m.item['ชื่อผู้ส่ง'] || '-');
-      const receiver = escapeHtml(m.item['ชื่อผู้รับ'] || '-');
-      const branch = escapeHtml(m.item['ส่งจากสาขา'] || '');
+    box.innerHTML = headerHtml + matches.map((m, i) => {
       return (
-        '<button type="button" class="suggestion-item" data-key="' + escapeHtml(m.key) + '">' +
+        '<button type="button" class="suggestion-item" data-value="' + escapeHtml(m.value) + '" data-index="' + i + '">' +
         '<i class="bx bx-search suggestion-icon"></i>' +
         '<div class="suggestion-text">' +
-        '<div class="suggestion-main">' + highlightTerm(m.matchField, term) + '</div>' +
-        '<div class="suggestion-sub">' + sender + ' → ' + receiver +
-        (branch ? ' · ' + branch : '') + '</div>' +
+        '<div class="suggestion-main">' + highlightTerm(m.value, term) + '</div>' +
+        '<div class="suggestion-sub">' + escapeHtml(m.label) + '</div>' +
         '</div>' +
-        '<span class="suggestion-key">' + escapeHtml(m.key) + '</span>' +
+        '<span class="suggestion-key">' + escapeHtml(m.label) + '</span>' +
         '</button>'
       );
     }).join('');
@@ -401,9 +436,9 @@ document.addEventListener('DOMContentLoaded', () => {
     box.querySelectorAll('.suggestion-item').forEach(btn => {
       btn.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus
       btn.addEventListener('click', () => {
-        const key = btn.getAttribute('data-key');
-        input.value = key;
-        searchTerms[tab] = key.toLowerCase();
+        const value = btn.getAttribute('data-value');
+        input.value = value;
+        searchTerms[tab] = value.toLowerCase();
         hideSuggestions(tab);
         renderTab(tab);
       });
