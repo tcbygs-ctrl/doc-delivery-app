@@ -640,7 +640,13 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="sig-preview-text"><i class="bx bx-edit-alt"></i> ลายเซ็นผู้รับ — กดเพื่อดู</span>
         </div>
       ` : ''}
+      </div>
     `;
+
+    // Swipe-to-delete (mobile/tablet only) for non-finished cards
+    if (type !== 'finished') {
+      enableSwipeDelete(card, key);
+    }
 
     // Signature preview click (for finished cards)
     const sigPreview = card.querySelector('.sig-preview-wrap');
