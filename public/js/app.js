@@ -651,8 +651,9 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Search filter
-    if (term) {
+    // Search filter (tags AND live term, all must match)
+    const tags = searchTags[tab] || [];
+    if (term || tags.length) {
       items = items.filter(item => {
         const searchable = [
           item['Key'],
@@ -664,7 +665,11 @@ document.addEventListener('DOMContentLoaded', () => {
           item['ส่งจากสาขา'],
           item['วันที่ส่งเอกสาร/พัสดุ']
         ].filter(Boolean).join(' ').toLowerCase();
-        return searchable.includes(term);
+        if (term && !searchable.includes(term)) return false;
+        for (const t of tags) {
+          if (!searchable.includes(String(t).toLowerCase())) return false;
+        }
+        return true;
       });
     }
 
