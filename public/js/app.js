@@ -344,8 +344,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return fetch('/api/jobs/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).then(r => r.json()).then(json => {
+        body: JSON.stringify({ ...payload, _userId: userId })
+      }).then(async r => {
+        const json = await r.json();
+        if (r.status === 409 || json.conflict) {
+          showConflictToast(json.error || ('รายการ ' + key + ' กำลังถูกใช้งานโดยผู้ใช้งานท่านอื่น'));
+        }
+        return json;
+      }).then(json => {
         if (json.success || json.status === 'success') successCount++;
         else failCount++;
       }).catch(() => { failCount++; });
