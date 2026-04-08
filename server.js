@@ -131,20 +131,72 @@ app.get('/api/jobs/finished', async (req, res) => {
 
 app.post('/api/jobs/update', async (req, res) => {
   try {
+    cleanPresence();
+    const { key, _userId } = req.body || {};
+    if (key && _userId) {
+      const cur = presenceMap.get(key);
+      if (cur && cur.userId !== _userId) {
+        return res.status(409).json({
+          success: false,
+          conflict: true,
+          owner: cur.name,
+          error: 'รายการ ' + key + ' กำลังถูกดำเนินการโดย ' + cur.name
+        });
+      }
+    }
+
     const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('YOUR_SCRIPT_ID')) {
       return res.status(500).json({ success: false, error: 'APPS_SCRIPT_URL ยังไม่ได้ตั้งค่าใน .env' });
     }
-    const response = await axios.post(APPS_SCRIPT_URL, req.body, {
+    // Strip internal field before forwarding to Apps Script
+    const forwardBody = { ...req.body };
+    delete forwardBody._userId;
+    const response = await axios.post(APPS_SCRIPT_URL, forwardBody, {
       headers: { 'Content-Type': 'application/json' },
       timeout: 15000
     });
     dataCache = { rows: null, ts: 0 }; // Invalidate cache
+    if (key) presenceMap.delete(key); // release after successful update
     res.json(response.data);
   } catch (err) {
     console.error('update error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// ====== Presence endpoints ======
+app.post('/api/presence/heartbeat', (req, res) => {
+  cleanPresence();
+  const { userId, name, claims = [] } = req.body || {};
+  if (!userId) return res.status(400).json({ success: false, error: 'userId required' });
+  const now = Date.now();
+  const claimSet = new Set(claims);
+  // Refresh own claims; do not steal others'
+  for (const key of claimSet) {
+    const cur = presenceMap.get(key);
+    if (!cur || cur.userId === userId) {
+      presenceMap.set(key, { userId, name: name || 'ผู้ใช้', ts: now });
+    }
+  }
+  // Release any keys held by this user no longer in claims
+  for (const [k, v] of presenceMap) {
+    if (v.userId === userId && !claimSet.has(k)) presenceMap.delete(k);
+  }
+  // Build response: only OTHER users' active claims
+  const others = {};
+  for (const [k, v] of presenceMap) {
+    if (v.userId !== userId) others[k] = { userId: v.userId, name: v.name };
+  }
+  res.json({ success: true, others });
+});
+
+app.post('/api/presence/release', (req, res) => {
+  const { userId, key } = req.body || {};
+  if (!userId || !key) return res.status(400).json({ success: false });
+  const cur = presenceMap.get(key);
+  if (cur && cur.userId === userId) presenceMap.delete(key);
+  res.json({ success: true });
 });
 
 app.get('/api/health', (req, res) => {
