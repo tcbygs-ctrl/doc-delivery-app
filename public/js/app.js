@@ -147,6 +147,8 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchData();
   fetchFinishedJobs(true);
   setInterval(() => fetchData(false), 15000);
+  sendHeartbeat();
+  setInterval(sendHeartbeat, 8000);
 
   refreshBtn.addEventListener('click', () => {
     const icon = refreshBtn.querySelector('svg') || refreshBtn.querySelector('i');
