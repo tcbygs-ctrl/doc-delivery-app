@@ -886,6 +886,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const checkbox = card.querySelector('.card-checkbox');
       card.addEventListener('click', (e) => {
         if (e.target.closest('.sig-preview-wrap')) return;
+        // Block selection if another user is currently working on this item
+        const owner = othersPresence[key];
+        if (owner && !checkbox.checked) {
+          e.preventDefault();
+          if (e.target.classList.contains('card-checkbox')) checkbox.checked = false;
+          showConflictToast('รายการ ' + key + ' กำลังถูกดำเนินการโดย ' + owner.name);
+          return;
+        }
         if (!e.target.classList.contains('card-checkbox')) {
           checkbox.checked = !checkbox.checked;
         }
@@ -897,6 +905,7 @@ document.addEventListener('DOMContentLoaded', () => {
           card.classList.remove('selected');
         }
         updateBatchBar();
+        sendHeartbeat();
       });
     }
 
