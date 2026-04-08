@@ -10,6 +10,7 @@
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
     "@fontsource/noto-sans-thai": "^5.2.8",
+    "@vercel/speed-insights": "^2.0.0",
     "axios": "^1.6.0",
     "boxicons": "^2.1.4",
     "cors": "^2.8.5",
