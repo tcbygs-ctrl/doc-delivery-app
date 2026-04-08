@@ -778,8 +778,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = document.createElement('div');
     card.className = 'job-card';
     const key = job.Key;
+    card.setAttribute('data-key', key);
     const isSelected = selectedKeys[type].has(key);
     if (isSelected) card.classList.add('selected');
+    const lockedBy = othersPresence[key];
+    if (lockedBy) card.classList.add('is-locked');
     
     const sender = job['ชื่อผู้ส่ง'] || '-';
     const receiver = job['ชื่อผู้รับ'] || '-';
