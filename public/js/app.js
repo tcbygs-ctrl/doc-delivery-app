@@ -306,19 +306,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function getSearchableFields(item) {
-    return [
-      item['Key'],
-      item['ชื่อผู้ส่ง'],
-      item['ชื่อผู้รับ'],
-      item['แผนก ต้นทาง'],
-      item['แผนก ปลายทาง'],
-      item['รายละเอียด'],
-      item['ส่งจากสาขา'],
-      item['วันที่ส่งเอกสาร/พัสดุ']
-    ].filter(Boolean);
-  }
-
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
