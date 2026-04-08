@@ -566,6 +566,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const sender = job['ชื่อผู้ส่ง'] || '-';
     const receiver = job['ชื่อผู้รับ'] || '-';
     const qty = job['จำนวน'] || '1';
+    // รายละเอียดเอกสาร = คอลัมน์ F ของ Google Sheet (index 5, นับจาก A=0)
+    const detail = Object.values(job)[5] || '';
     const branch = job['ส่งจากสาขา'] || '';
     const sigUrl = job['Txt_01'] || job['Dropoff Signature'] || '';
     
@@ -1128,5 +1130,110 @@ document.addEventListener('DOMContentLoaded', () => {
       toast.style.transition = 'all 0.3s';
       setTimeout(() => toast.remove(), 300);
     }, 3000);
+  }
+
+  // ====== PWA: register service worker (required for install prompt) ======
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('SW registration failed:', err);
+    });
+  }
+
+  // ====== PWA Install Prompt ======
+  setupInstallPrompt();
+
+  function setupInstallPrompt() {
+    const STORAGE_KEY = 'pwa-install-dismissed';
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true;
+    if (isStandalone) return;
+    if (localStorage.getItem(STORAGE_KEY) === '1') return;
+
+    const ua = window.navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+
+    let deferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      setTimeout(() => showInstallDialog(false), 1500);
+    });
+
+    window.addEventListener('appinstalled', () => {
+      localStorage.setItem(STORAGE_KEY, '1');
+      const d = document.getElementById('pwa-install-dialog');
+      if (d) d.remove();
+    });
+
+    if (isIOS) {
+      setTimeout(() => showInstallDialog(true), 1500);
+    }
+
+    function showInstallDialog(iosMode) {
+      if (document.getElementById('pwa-install-dialog')) return;
+
+      const overlay = document.createElement('div');
+      overlay.id = 'pwa-install-dialog';
+      overlay.style.cssText =
+        'position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);' +
+        '-webkit-backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:flex-end;' +
+        'justify-content:center;padding:16px;animation:fadeIn 0.3s;';
+
+      const card = document.createElement('div');
+      card.style.cssText =
+        'background:var(--panel-bg,#0e1729);color:var(--text-main,#fff);border:1px solid var(--border,#1f2937);' +
+        'border-radius:16px;padding:20px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);' +
+        'margin-bottom:calc(env(safe-area-inset-bottom,0px) + 16px);animation:slideUp 0.3s;';
+
+      const iosHelp = iosMode
+        ? '<div style="font-size:13px;color:var(--text-muted,#94a3b8);margin-top:10px;line-height:1.6;">' +
+          'แตะปุ่ม <b>แชร์</b> <i class="bx bx-share"></i> ที่แถบล่างของ Safari แล้วเลือก <b>"เพิ่มที่หน้าจอโฮม"</b></div>'
+        : '';
+
+      card.innerHTML =
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">' +
+        '<div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);' +
+        'display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;">' +
+        '<i class="bx bx-download"></i></div>' +
+        '<div style="flex:1;"><div style="font-weight:700;font-size:16px;">ติดตั้ง DocDelivery</div>' +
+        '<div style="font-size:12px;color:var(--text-muted,#94a3b8);">เปิดแบบเต็มหน้าจอ ไม่มีแถบเบราว์เซอร์</div></div>' +
+        '</div>' +
+        '<div style="font-size:14px;color:var(--text-main,#e2e8f0);margin-top:6px;">' +
+        'คุณต้องการสร้างไอคอน DocDelivery บนหน้าจอหลักหรือไม่?</div>' +
+        iosHelp +
+        '<div style="display:flex;gap:8px;margin-top:16px;">' +
+        '<button id="pwa-cancel" style="flex:1;padding:10px;border:1px solid var(--border,#1f2937);' +
+        'background:transparent;color:var(--text-main,#fff);border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit;">ไม่ใช่ตอนนี้</button>' +
+        (iosMode
+          ? '<button id="pwa-ok" style="flex:1;padding:10px;border:none;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit;">เข้าใจแล้ว</button>'
+          : '<button id="pwa-ok" style="flex:1;padding:10px;border:none;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit;">ติดตั้งเลย</button>') +
+        '</div>';
+
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+
+      const close = () => overlay.remove();
+      document.getElementById('pwa-cancel').onclick = () => {
+        localStorage.setItem(STORAGE_KEY, '1');
+        close();
+      };
+      document.getElementById('pwa-ok').onclick = async () => {
+        if (iosMode) {
+          close();
+          return;
+        }
+        if (deferredPrompt) {
+          close();
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'dismissed') {
+            localStorage.setItem(STORAGE_KEY, '1');
+          }
+          deferredPrompt = null;
+        }
+      };
+    }
   }
 });
