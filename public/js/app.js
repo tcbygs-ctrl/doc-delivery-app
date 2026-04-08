@@ -278,8 +278,127 @@ document.addEventListener('DOMContentLoaded', () => {
     tabs.forEach(tab => {
       const input = document.getElementById(`search-${tab}`);
       if (!input) return;
+
+      // Build suggestions dropdown next to input
+      const wrap = input.parentElement;
+      if (wrap && !wrap.querySelector('.search-suggestions')) {
+        const sug = document.createElement('div');
+        sug.className = 'search-suggestions hidden';
+        sug.id = `suggestions-${tab}`;
+        wrap.appendChild(sug);
+      }
+
       input.addEventListener('input', () => {
         searchTerms[tab] = input.value.trim().toLowerCase();
+        renderSuggestions(tab);
+        renderTab(tab);
+      });
+      input.addEventListener('focus', () => renderSuggestions(tab));
+      input.addEventListener('blur', () => {
+        setTimeout(() => hideSuggestions(tab), 150);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          hideSuggestions(tab);
+          input.blur();
+        }
+      });
+    });
+  }
+
+  function getSearchableFields(item) {
+    return [
+      item['Key'],
+      item['ชื่อผู้ส่ง'],
+      item['ชื่อผู้รับ'],
+      item['แผนก ต้นทาง'],
+      item['แผนก ปลายทาง'],
+      item['รายละเอียด'],
+      item['ส่งจากสาขา'],
+      item['วันที่ส่งเอกสาร/พัสดุ']
+    ].filter(Boolean);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function highlightTerm(text, term) {
+    const safe = escapeHtml(text);
+    if (!term) return safe;
+    const idx = safe.toLowerCase().indexOf(term.toLowerCase());
+    if (idx === -1) return safe;
+    return safe.slice(0, idx) +
+      '<mark>' + safe.slice(idx, idx + term.length) + '</mark>' +
+      safe.slice(idx + term.length);
+  }
+
+  function hideSuggestions(tab) {
+    const box = document.getElementById(`suggestions-${tab}`);
+    if (box) box.classList.add('hidden');
+  }
+
+  function renderSuggestions(tab) {
+    const box = document.getElementById(`suggestions-${tab}`);
+    const input = document.getElementById(`search-${tab}`);
+    if (!box || !input) return;
+    const term = (input.value || '').trim().toLowerCase();
+    if (!term) {
+      box.classList.add('hidden');
+      box.innerHTML = '';
+      return;
+    }
+
+    // Match against current tab data (top 8 unique by Key)
+    const seen = new Set();
+    const matches = [];
+    for (const item of data[tab]) {
+      const fields = getSearchableFields(item);
+      const joined = fields.join(' ').toLowerCase();
+      if (!joined.includes(term)) continue;
+      const key = item['Key'] || '';
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      // Pick the most relevant matching field for display
+      const matchField = fields.find(f => String(f).toLowerCase().includes(term)) || key;
+      matches.push({ item, key, matchField });
+      if (matches.length >= 8) break;
+    }
+
+    if (!matches.length) {
+      box.classList.add('hidden');
+      box.innerHTML = '';
+      return;
+    }
+
+    box.innerHTML = matches.map(m => {
+      const sender = escapeHtml(m.item['ชื่อผู้ส่ง'] || '-');
+      const receiver = escapeHtml(m.item['ชื่อผู้รับ'] || '-');
+      const branch = escapeHtml(m.item['ส่งจากสาขา'] || '');
+      return (
+        '<button type="button" class="suggestion-item" data-key="' + escapeHtml(m.key) + '">' +
+        '<i class="bx bx-search suggestion-icon"></i>' +
+        '<div class="suggestion-text">' +
+        '<div class="suggestion-main">' + highlightTerm(m.matchField, term) + '</div>' +
+        '<div class="suggestion-sub">' + sender + ' → ' + receiver +
+        (branch ? ' · ' + branch : '') + '</div>' +
+        '</div>' +
+        '<span class="suggestion-key">' + escapeHtml(m.key) + '</span>' +
+        '</button>'
+      );
+    }).join('');
+    box.classList.remove('hidden');
+
+    box.querySelectorAll('.suggestion-item').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-key');
+        input.value = key;
+        searchTerms[tab] = key.toLowerCase();
+        hideSuggestions(tab);
         renderTab(tab);
       });
     });
