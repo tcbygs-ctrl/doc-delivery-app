@@ -17,6 +17,18 @@ app.use(express.static(path.join(__dirname, 'public')));
 let dataCache = { rows: null, ts: 0 };
 const CACHE_TTL = 15000;
 
+// ====== Presence (in-memory) ======
+// Map<key, { userId, name, ts }>
+const presenceMap = new Map();
+const PRESENCE_TTL = 25000;
+
+function cleanPresence() {
+  const now = Date.now();
+  for (const [k, v] of presenceMap) {
+    if (now - v.ts > PRESENCE_TTL) presenceMap.delete(k);
+  }
+}
+
 function parseGvizResponse(text) {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
