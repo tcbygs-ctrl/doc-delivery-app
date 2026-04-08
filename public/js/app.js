@@ -101,6 +101,20 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (_) { /* ignore */ }
   }
 
+  function showConflictToast(msg) {
+    let t = document.getElementById('conflict-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'conflict-toast';
+      t.className = 'conflict-toast';
+      document.body.appendChild(t);
+    }
+    t.innerHTML = '<i class="bx bxs-lock-alt"></i> ' + msg;
+    t.classList.add('show');
+    clearTimeout(t._hideTimer);
+    t._hideTimer = setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
   function updatePresenceIcons() {
     document.querySelectorAll('.job-card[data-key]').forEach(card => {
       const k = card.getAttribute('data-key');
