@@ -314,9 +314,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/jobs/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ ...payload, _userId: userId })
       });
       const json = await res.json();
+      if (res.status === 409 || json.conflict) {
+        showConflictToast(json.error || 'รายการนี้กำลังถูกใช้งานโดยผู้ใช้งานท่านอื่น');
+        throw new Error(json.error || 'Conflict');
+      }
       if (!json.success && json.status !== 'success') throw new Error(json.error || 'Update failed');
       
       closeModal();
