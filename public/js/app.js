@@ -841,6 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="card-left">
           ${type !== 'finished' ? `<input type="checkbox" class="card-checkbox" data-key="${key}" ${isSelected ? 'checked' : ''} />` : ''}
           <span class="card-key">${key}</span>
+          ${lockedBy ? `<span class="presence-lock" title="กำลังถูกใช้งานโดย ${lockedBy.name}"><i class="bx bxs-user-circle"></i><span class="presence-name">${lockedBy.name}</span></span>` : ''}
         </div>
         <span class="card-time">${job['เวลาทำรายการ'] || ''}</span>
       </div>
