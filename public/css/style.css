@@ -782,20 +782,21 @@ h3 {
   right: 0;
   height: calc(var(--nav-height) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
+  box-sizing: border-box;
   background: var(--nav-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
-  align-items: center;
+  align-items: stretch;
   z-index: 40;
   transition: background 0.3s;
 }
 
 .nav-btn {
   flex: 1;
-  height: 100%;
+  height: var(--nav-height);
   background: none;
   border: none;
   color: var(--text-muted);
