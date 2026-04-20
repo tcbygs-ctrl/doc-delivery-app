@@ -9,7 +9,6 @@ const PORT = process.env.PORT || 3000;
 const SHEET_ID = process.env.SHEET_ID || '1K-uQpZn21dM0YzInjE2Lj-ZSuWOf-a-y4Vr1WMtDjWY';
 const SHEET_NAME = process.env.SHEET_NAME || 'Job';
 const CREDS_PATH = process.env.GOOGLE_CREDENTIALS_PATH || './reflected-drake-427610-p8-13c0068b2a7a.json';
-const SIGNATURE_FOLDER_ID = process.env.SIGNATURE_FOLDER_ID || '';
 const POLL_MS = parseInt(process.env.SHEETS_POLL_MS || '2500', 10);
 
 // ---- Google APIs ----
