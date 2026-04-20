@@ -1451,6 +1451,16 @@ document.addEventListener('DOMContentLoaded', () => {
     return compressSignature(canvas);
   }
 
+  function isValidSignatureSrc(src) {
+    if (!src) return false;
+    const s = String(src).trim();
+    return s.startsWith('http') || s.startsWith('data:image/');
+  }
+
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   // Downscale signature canvas to ≤600px width + export as JPEG 0.82
   // Reduces payload from ~50KB PNG → ~5-10KB JPEG, making Drive upload much faster
   function compressSignature(srcCanvas) {
