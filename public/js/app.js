@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
   createSignatureViewer();
   fetchData();
   fetchFinishedJobs(true);
-  setInterval(() => fetchData(false), 15000);
+  initRealtimeStream();
   sendHeartbeat();
   setInterval(sendHeartbeat, 8000);
 
