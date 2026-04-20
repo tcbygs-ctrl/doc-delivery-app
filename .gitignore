@@ -3,3 +3,9 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Google Service Account credentials
+*-service-account.json
+reflected-drake-*.json
+credentials.json
+google-credentials.json

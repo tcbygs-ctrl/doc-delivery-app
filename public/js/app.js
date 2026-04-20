@@ -1062,7 +1062,7 @@ document.addEventListener('DOMContentLoaded', () => {
         batchConfirmLabel.textContent = 'รับเข้าระบบ';
         batchConfirmBtn.className = 'batch-btn batch-confirm';
       } else if (currentTab === 'started') {
-        batchConfirmLabel.textContent = 'ยืนยันส่งมอบ';
+        batchConfirmLabel.textContent = 'ส่งมอบ';
         batchConfirmBtn.className = 'batch-btn batch-confirm started-action';
       }
     } else {
@@ -1102,7 +1102,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       closeBatchSigModal();
       batchSigConfirmBtn.disabled = false;
-      batchSigConfirmLabel.textContent = 'ยืนยันส่งมอบ';
+      batchSigConfirmLabel.textContent = 'ส่งมอบ';
     });
 
     // Init batch sig canvas
