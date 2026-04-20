@@ -134,7 +134,11 @@ app.get('/api/jobs/finished', async (req, res) => {
   try {
     await refreshCache(req.query.refresh === '1');
     let finishedJobs = filterFinished(cached.rows);
-    finishedJobs.sort((a, b) => (b['Dropoff'] || b['เวลาทำรายการ'] || '').localeCompare(a['Dropoff'] || a['เวลาทำรายการ'] || ''));
+    finishedJobs.sort((a, b) => {
+      const ta = parseThaiDate(a['Dropoff'] || a['เวลาทำรายการ']);
+      const tb = parseThaiDate(b['Dropoff'] || b['เวลาทำรายการ']);
+      return tb - ta; // latest Dropoff first
+    });
 
     const { month, page = 1, limit = 50 } = req.query;
     if (month) {
