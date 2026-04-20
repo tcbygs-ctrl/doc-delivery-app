@@ -1,104 +1,134 @@
 require('dotenv').config();
 const express = require('express');
-const axios = require('axios');
 const cors = require('cors');
 const path = require('path');
+const { google } = require('googleapis');
+const { Readable } = require('stream');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SHEET_ID = process.env.SHEET_ID || '1K-uQpZn21dM0YzInjE2Lj-ZSuWOf-a-y4Vr1WMtDjWY';
-const SHEET_NAME = 'Job';
+const SHEET_NAME = process.env.SHEET_NAME || 'Job';
+const CREDS_PATH = process.env.GOOGLE_CREDENTIALS_PATH || './reflected-drake-427610-p8-13c0068b2a7a.json';
+const SIGNATURE_FOLDER_ID = process.env.SIGNATURE_FOLDER_ID || '';
+const POLL_MS = parseInt(process.env.SHEETS_POLL_MS || '2500', 10);
+
+// ---- Google APIs ----
+const auth = new google.auth.GoogleAuth({
+  keyFile: path.resolve(CREDS_PATH),
+  scopes: [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive',
+  ],
+});
+const sheets = google.sheets({ version: 'v4', auth });
+const drive = google.drive({ version: 'v3', auth });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Cache
-let dataCache = { rows: null, ts: 0 };
-const CACHE_TTL = 15000;
+// ---- State ----
+let cached = { rows: null, ts: 0, sig: '' };
+let headers = [];
 
-// ====== Presence (in-memory) ======
-// Map<key, { userId, name, ts }>
+// ---- SSE ----
+const sseClients = new Set();
+function broadcast(event, payload) {
+  const chunk = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
+  for (const c of sseClients) { try { c.write(chunk); } catch {} }
+}
+
+function hashRows(rows) {
+  let h = 0;
+  const str = JSON.stringify(rows.map(r => [r.Key, r.Status, r.Cancel, r.Dropoff, r.Remark, r['Txt_01']]));
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  return String(h);
+}
+
+function colLetter(idx) {
+  let n = idx + 1, s = '';
+  while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
+// ---- Core fetch ----
+async function fetchRowsFromSheets() {
+  const resp = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: SHEET_NAME,
+    valueRenderOption: 'FORMATTED_VALUE',
+    dateTimeRenderOption: 'FORMATTED_STRING',
+  });
+  const values = resp.data.values || [];
+  if (values.length === 0) return { headers: [], rows: [] };
+  const hdrs = values[0].map(h => String(h || '').trim());
+  const rows = values.slice(1).map(r => {
+    const o = {};
+    hdrs.forEach((h, i) => { if (h) o[h] = r[i] != null ? String(r[i]).trim() : ''; });
+    return o;
+  });
+  return { headers: hdrs, rows };
+}
+
+async function refreshCache(force = false) {
+  if (!force && cached.rows && (Date.now() - cached.ts) < 1000) return cached;
+  const { headers: hdrs, rows } = await fetchRowsFromSheets();
+  headers = hdrs;
+  const sig = hashRows(rows);
+  const changed = sig !== cached.sig;
+  cached = { rows, ts: Date.now(), sig };
+  if (changed) broadcast('jobs', { ts: cached.ts, count: rows.length });
+  return cached;
+}
+
+function filterActive(rows) {
+  return rows.filter(job => {
+    if (!job.Key) return false;
+    const s = String(job.Status || '').trim().toLowerCase();
+    const c = String(job.Cancel || '').trim().toLowerCase();
+    if (c === 'yes' || c === 'true') return false;
+    if (s === 'cancelled') return false;
+    return s !== 'finished' && s !== '3';
+  });
+}
+function filterFinished(rows) {
+  return rows.filter(job => {
+    if (!job.Key) return false;
+    const s = String(job.Status || '').trim().toLowerCase();
+    const c = String(job.Cancel || '').trim().toLowerCase();
+    if (c === 'yes' || c === 'true') return false;
+    if (s === 'cancelled') return false;
+    return s === 'finished' || s === '3';
+  });
+}
+
+// ---- Presence ----
 const presenceMap = new Map();
 const PRESENCE_TTL = 25000;
-
 function cleanPresence() {
   const now = Date.now();
-  for (const [k, v] of presenceMap) {
-    if (now - v.ts > PRESENCE_TTL) presenceMap.delete(k);
-  }
+  for (const [k, v] of presenceMap) if (now - v.ts > PRESENCE_TTL) presenceMap.delete(k);
 }
 
-function parseGvizResponse(text) {
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('Invalid gviz response');
-  const json = JSON.parse(text.slice(start, end + 1));
-  const cols = json.table.cols.map(c => c.label || c.id);
-  const rows = (json.table.rows || []).map(row => {
-    const obj = {};
-    (row.c || []).forEach((cell, i) => {
-      const key = cols[i];
-      if (!key) return;
-      if (!cell || cell.v === null || cell.v === undefined) {
-        obj[key] = '';
-      } else if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
-        obj[key] = cell.f || cell.v;
-      } else {
-        obj[key] = String(cell.v).trim();
-      }
-    });
-    return obj;
-  });
-  return rows;
-}
-
-async function fetchJobs(force = false) {
-  const now = Date.now();
-  if (!force && dataCache.rows && (now - dataCache.ts) < CACHE_TTL) {
-    return dataCache.rows;
-  }
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&_=${now}`;
-  const { data } = await axios.get(url, { timeout: 10000 });
-  const rows = parseGvizResponse(data);
-  dataCache = { rows, ts: now };
-  return rows;
-}
-
+// ---- Routes ----
 app.get('/api/jobs', async (req, res) => {
   try {
-    const jobs = await fetchJobs(req.query.refresh === '1');
-    const activeJobs = jobs.filter(job => {
-      if (!job.Key) return false;
-      const statusRaw = String(job.Status || '').trim().toLowerCase();
-      const cancel = String(job.Cancel || '').trim().toLowerCase();
-      if (cancel === 'yes' || cancel === 'true') return false;
-      if (statusRaw === 'cancelled') return false;
-      return statusRaw !== 'finished' && statusRaw !== '3';
-    });
-    res.json({ success: true, data: activeJobs, timestamp: Date.now() });
+    await refreshCache(req.query.refresh === '1');
+    res.json({ success: true, data: filterActive(cached.rows), timestamp: cached.ts });
   } catch (err) {
-    console.error('fetchJobs error:', err.message);
+    console.error('jobs error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 app.get('/api/jobs/finished', async (req, res) => {
   try {
-    const jobs = await fetchJobs(req.query.refresh === '1');
-    let finishedJobs = jobs.filter(job => {
-      if (!job.Key) return false;
-      const statusRaw = String(job.Status || '').trim().toLowerCase();
-      const cancel = String(job.Cancel || '').trim().toLowerCase();
-      if (cancel === 'yes' || cancel === 'true') return false;
-      if (statusRaw === 'cancelled') return false;
-      return statusRaw === 'finished' || statusRaw === '3';
-    });
-
+    await refreshCache(req.query.refresh === '1');
+    let finishedJobs = filterFinished(cached.rows);
     finishedJobs.sort((a, b) => (b['Dropoff'] || b['เวลาทำรายการ'] || '').localeCompare(a['Dropoff'] || a['เวลาทำรายการ'] || ''));
 
     const { month, page = 1, limit = 50 } = req.query;
-
     if (month) {
       finishedJobs = finishedJobs.filter(item => {
         const dropoff = item['Dropoff'] || item['เวลาทำรายการ'] || '';
@@ -111,83 +141,153 @@ app.get('/api/jobs/finished', async (req, res) => {
         return false;
       });
     }
-
     const startIdx = (parseInt(page) - 1) * parseInt(limit);
     const endIdx = parseInt(page) * parseInt(limit);
-    const paginated = finishedJobs.slice(startIdx, endIdx);
-
     res.json({
       success: true,
-      data: paginated,
+      data: finishedJobs.slice(startIdx, endIdx),
       hasMore: endIdx < finishedJobs.length,
       total: finishedJobs.length,
-      timestamp: Date.now()
+      timestamp: cached.ts,
     });
   } catch (err) {
-    console.error('fetchFinishedJobs error:', err.message);
+    console.error('finished error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
+async function findRowByKey(key) {
+  await refreshCache(false);
+  for (let i = 0; i < cached.rows.length; i++) {
+    if (String(cached.rows[i].Key) === String(key)) return { rowNumber: i + 2, row: cached.rows[i] };
+  }
+  return null;
+}
+
+async function saveSignatureToDrive(key, base64Data) {
+  const parts = base64Data.split(',');
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+  const buffer = Buffer.from(parts[1], 'base64');
+
+  let folderId = SIGNATURE_FOLDER_ID;
+  if (!folderId) {
+    const q = `name='DocDelivery_Signatures' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    const list = await drive.files.list({ q, fields: 'files(id,name)' });
+    if (list.data.files && list.data.files.length > 0) {
+      folderId = list.data.files[0].id;
+    } else {
+      const created = await drive.files.create({
+        requestBody: { name: 'DocDelivery_Signatures', mimeType: 'application/vnd.google-apps.folder' },
+        fields: 'id',
+      });
+      folderId = created.data.id;
+      await drive.permissions.create({ fileId: folderId, requestBody: { role: 'reader', type: 'anyone' } });
+    }
+  }
+
+  const fileRes = await drive.files.create({
+    requestBody: { name: `sig_${key}.png`, parents: [folderId] },
+    media: { mimeType: mime, body: Readable.from(buffer) },
+    fields: 'id',
+  });
+  const fileId = fileRes.data.id;
+  await drive.permissions.create({ fileId, requestBody: { role: 'reader', type: 'anyone' } });
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+}
+
 app.post('/api/jobs/update', async (req, res) => {
   try {
     cleanPresence();
-    const { key, _userId } = req.body || {};
-    if (key && _userId) {
+    const { key, _userId, status, signature, dropoff, remark, action, note } = req.body || {};
+    if (!key) return res.status(400).json({ success: false, error: 'ไม่ได้ระบุ Key' });
+
+    if (_userId) {
       const cur = presenceMap.get(key);
       if (cur && cur.userId !== _userId) {
         return res.status(409).json({
-          success: false,
-          conflict: true,
-          owner: cur.name,
-          error: 'รายการ ' + key + ' กำลังถูกดำเนินการโดย ' + cur.name
+          success: false, conflict: true, owner: cur.name,
+          error: 'รายการ ' + key + ' กำลังถูกดำเนินการโดย ' + cur.name,
         });
       }
     }
 
-    const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
-    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('YOUR_SCRIPT_ID')) {
-      return res.status(500).json({ success: false, error: 'APPS_SCRIPT_URL ยังไม่ได้ตั้งค่าใน .env' });
+    const found = await findRowByKey(key);
+    if (!found) return res.status(404).json({ success: false, error: 'ไม่พบข้อมูล Key ที่ระบุ' });
+    const { rowNumber } = found;
+    const idxOf = name => headers.indexOf(name);
+    const updates = [];
+
+    if (action === 'cancel') {
+      const cancelIdx = idxOf('Cancel');
+      if (cancelIdx !== -1) {
+        updates.push({ range: `${SHEET_NAME}!${colLetter(cancelIdx)}${rowNumber}`, values: [['Yes']] });
+      } else {
+        const statusIdx = idxOf('Status');
+        if (statusIdx !== -1) updates.push({ range: `${SHEET_NAME}!${colLetter(statusIdx)}${rowNumber}`, values: [['Cancelled']] });
+      }
+      updates.push({ range: `${SHEET_NAME}!T${rowNumber}`, values: [[note || '']] });
+    } else {
+      const statusIdx = idxOf('Status');
+      if (statusIdx !== -1 && status !== undefined) {
+        updates.push({ range: `${SHEET_NAME}!${colLetter(statusIdx)}${rowNumber}`, values: [[status]] });
+      }
+      if (status === 'Finished') {
+        const dropoffIdx = idxOf('Dropoff');
+        if (dropoffIdx !== -1 && dropoff) updates.push({ range: `${SHEET_NAME}!${colLetter(dropoffIdx)}${rowNumber}`, values: [[dropoff]] });
+        const remarkIdx = idxOf('Remark');
+        if (remarkIdx !== -1 && remark) updates.push({ range: `${SHEET_NAME}!${colLetter(remarkIdx)}${rowNumber}`, values: [[remark]] });
+
+        if (signature && signature.startsWith('data:image')) {
+          try {
+            const sigUrl = await saveSignatureToDrive(key, signature);
+            const txt01Idx = idxOf('Txt_01');
+            const dropoffSigIdx = idxOf('Dropoff Signature');
+            if (txt01Idx !== -1) updates.push({ range: `${SHEET_NAME}!${colLetter(txt01Idx)}${rowNumber}`, values: [[sigUrl]] });
+            if (dropoffSigIdx !== -1) updates.push({ range: `${SHEET_NAME}!${colLetter(dropoffSigIdx)}${rowNumber}`, values: [[sigUrl]] });
+          } catch (sigErr) {
+            console.error('signature upload failed:', sigErr.message);
+            const dropoffSigIdx = idxOf('Dropoff Signature');
+            if (dropoffSigIdx !== -1) updates.push({ range: `${SHEET_NAME}!${colLetter(dropoffSigIdx)}${rowNumber}`, values: [[signature]] });
+          }
+        }
+      }
     }
-    // Strip internal field before forwarding to Apps Script
-    const forwardBody = { ...req.body };
-    delete forwardBody._userId;
-    const response = await axios.post(APPS_SCRIPT_URL, forwardBody, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 15000
+
+    if (updates.length === 0) return res.json({ success: false, error: 'ไม่มีข้อมูลจะอัปเดต' });
+
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: { valueInputOption: 'USER_ENTERED', data: updates },
     });
-    dataCache = { rows: null, ts: 0 }; // Invalidate cache
-    if (key) presenceMap.delete(key); // release after successful update
-    res.json(response.data);
+
+    cached = { rows: null, ts: 0, sig: '' };
+    await refreshCache(true);
+    if (key) presenceMap.delete(key);
+
+    res.json({ success: true, message: action === 'cancel' ? 'ลบรายการเรียบร้อย' : 'อัปเดตข้อมูลสำเร็จ' });
   } catch (err) {
     console.error('update error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// ====== Presence endpoints ======
+// ---- Presence ----
 app.post('/api/presence/heartbeat', (req, res) => {
   cleanPresence();
   const { userId, name, claims = [] } = req.body || {};
   if (!userId) return res.status(400).json({ success: false, error: 'userId required' });
   const now = Date.now();
   const claimSet = new Set(claims);
-  // Refresh own claims; do not steal others'
   for (const key of claimSet) {
     const cur = presenceMap.get(key);
-    if (!cur || cur.userId === userId) {
-      presenceMap.set(key, { userId, name: name || 'ผู้ใช้', ts: now });
-    }
+    if (!cur || cur.userId === userId) presenceMap.set(key, { userId, name: name || 'ผู้ใช้', ts: now });
   }
-  // Release any keys held by this user no longer in claims
   for (const [k, v] of presenceMap) {
     if (v.userId === userId && !claimSet.has(k)) presenceMap.delete(k);
   }
-  // Build response: only OTHER users' active claims
   const others = {};
-  for (const [k, v] of presenceMap) {
-    if (v.userId !== userId) others[k] = { userId: v.userId, name: v.name };
-  }
+  for (const [k, v] of presenceMap) if (v.userId !== userId) others[k] = { userId: v.userId, name: v.name };
   res.json({ success: true, others });
 });
 
@@ -199,10 +299,48 @@ app.post('/api/presence/release', (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', cached: !!dataCache.rows, cacheAge: Date.now() - dataCache.ts });
+// ---- SSE (real-time push) ----
+app.get('/api/events', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write(`: connected\n\n`);
+  res.write(`event: hello\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+  sseClients.add(res);
+  const ping = setInterval(() => { try { res.write(`: ping\n\n`); } catch {} }, 20000);
+  req.on('close', () => { clearInterval(ping); sseClients.delete(res); });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n🚀 DocDelivery App → http://localhost:${PORT}\n`);
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    cached: !!cached.rows,
+    rowCount: cached.rows ? cached.rows.length : 0,
+    cacheAge: Date.now() - cached.ts,
+    sseClients: sseClients.size,
+    pollMs: POLL_MS,
+  });
+});
+
+// ---- Background poller for real-time ----
+async function pollLoop() {
+  try { await refreshCache(true); }
+  catch (err) { console.error('poll error:', err.message); }
+  finally { setTimeout(pollLoop, POLL_MS); }
+}
+
+app.listen(PORT, async () => {
+  console.log(`\n🚀 DocDelivery App → http://localhost:${PORT}`);
+  console.log(`   Poll interval: ${POLL_MS}ms | SSE stream: /api/events\n`);
+  try {
+    await refreshCache(true);
+    console.log(`✅ Sheets API connected. ${cached.rows.length} rows cached.\n`);
+  } catch (err) {
+    console.error('❌ Sheets API error:', err.message);
+    console.error('   ตรวจสอบ: (1) share Sheet ให้ service account, (2) path credentials JSON ถูกต้อง\n');
+  }
+  pollLoop();
 });
