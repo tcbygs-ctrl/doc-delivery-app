@@ -144,13 +144,12 @@ app.get('/api/jobs/finished', async (req, res) => {
     if (month) {
       finishedJobs = finishedJobs.filter(item => {
         const dropoff = item['Dropoff'] || item['เวลาทำรายการ'] || '';
-        const match = dropoff.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-        if (match) {
-          let year = parseInt(match[3]);
-          if (year > 2500) year -= 543;
-          return `${year}-${match[2]}` === month;
-        }
-        return false;
+        const match = dropoff.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (!match) return false;
+        let year = parseInt(match[3]);
+        if (year > 2500) year -= 543;
+        const mm = String(parseInt(match[2])).padStart(2, '0');
+        return `${year}-${mm}` === month;
       });
     }
     const startIdx = (parseInt(page) - 1) * parseInt(limit);
