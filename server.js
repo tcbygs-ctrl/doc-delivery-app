@@ -225,8 +225,7 @@ app.post('/api/jobs/update', async (req, res) => {
     const idxOf = name => headers.indexOf(name);
     const updates = [];
 
-    let sigPromise = null;
-    let sigTargets = null;
+    let sigSaved = false;
 
     if (action === 'cancel') {
       const cancelIdx = idxOf('Cancel');
@@ -248,46 +247,31 @@ app.post('/api/jobs/update', async (req, res) => {
         const remarkIdx = idxOf('Remark');
         if (remarkIdx !== -1 && remark) updates.push({ range: `${SHEET_NAME}!${colLetter(remarkIdx)}${rowNumber}`, values: [[remark]] });
 
-        // Kick off signature upload in parallel with status write — don't block
+        // Store signature as data URL directly in the cell (no Drive needed)
+        // Google Sheets cell limit = 50,000 chars; compressed JPEG signature ~4-11K chars (fits easily)
         if (signature && signature.startsWith('data:image')) {
-          sigPromise = saveSignatureToDrive(key, signature);
-          sigTargets = {
-            txt01: idxOf('Txt_01'),
-            dropoffSig: idxOf('Dropoff Signature'),
-          };
+          const CELL_LIMIT = 49500; // leave a little headroom
+          if (signature.length > CELL_LIMIT) {
+            console.warn(`signature too large (${signature.length} chars); skipped. Increase client compression.`);
+          } else {
+            const txt01Idx = idxOf('Txt_01');
+            const dropoffSigIdx = idxOf('Dropoff Signature');
+            if (txt01Idx !== -1) updates.push({ range: `${SHEET_NAME}!${colLetter(txt01Idx)}${rowNumber}`, values: [[signature]] });
+            if (dropoffSigIdx !== -1) updates.push({ range: `${SHEET_NAME}!${colLetter(dropoffSigIdx)}${rowNumber}`, values: [[signature]] });
+            sigSaved = true;
+          }
         }
       }
     }
 
-    if (updates.length === 0 && !sigPromise) {
+    if (updates.length === 0) {
       return res.json({ success: false, error: 'ไม่มีข้อมูลจะอัปเดต' });
     }
 
-    // Run status batchUpdate + signature upload in parallel
-    const statusWritePromise = updates.length
-      ? sheets.spreadsheets.values.batchUpdate({
-          spreadsheetId: SHEET_ID,
-          requestBody: { valueInputOption: 'USER_ENTERED', data: updates },
-        })
-      : Promise.resolve();
-
-    // Wait for both; sig URL then gets written in a second (small) batchUpdate
-    const [, sigUrl] = await Promise.all([
-      statusWritePromise,
-      sigPromise ? sigPromise.catch(err => { console.error('signature upload failed:', err.message); return null; }) : Promise.resolve(null),
-    ]);
-
-    if (sigUrl && sigTargets) {
-      const sigUpdates = [];
-      if (sigTargets.txt01 !== -1) sigUpdates.push({ range: `${SHEET_NAME}!${colLetter(sigTargets.txt01)}${rowNumber}`, values: [[sigUrl]] });
-      if (sigTargets.dropoffSig !== -1) sigUpdates.push({ range: `${SHEET_NAME}!${colLetter(sigTargets.dropoffSig)}${rowNumber}`, values: [[sigUrl]] });
-      if (sigUpdates.length) {
-        await sheets.spreadsheets.values.batchUpdate({
-          spreadsheetId: SHEET_ID,
-          requestBody: { valueInputOption: 'USER_ENTERED', data: sigUpdates },
-        });
-      }
-    }
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: { valueInputOption: 'RAW', data: updates },
+    });
 
     cached = { rows: null, ts: 0, sig: '' };
     refreshCache(true).catch(() => {}); // fire-and-forget — SSE will catch up
@@ -296,7 +280,7 @@ app.post('/api/jobs/update', async (req, res) => {
     res.json({
       success: true,
       message: action === 'cancel' ? 'ลบรายการเรียบร้อย' : 'อัปเดตข้อมูลสำเร็จ',
-      sigSaved: !!sigUrl,
+      sigSaved,
     });
   } catch (err) {
     console.error('update error:', err.message);
