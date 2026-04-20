@@ -978,7 +978,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${statusPill}
       </div>
       ${type === 'finished' && isValidSignatureSrc(sigUrl) ? `
-        <div class="sig-preview-wrap" data-sig-url="${escapeAttr(sigUrl)}" data-receiver="${receiver}">
+        <div class="sig-preview-wrap" data-receiver="${receiver}">
           <img class="sig-preview-img" src="${sigUrl}" alt="ลายเซ็น" loading="lazy" onerror="this.parentElement.style.display='none'" />
           <span class="sig-preview-text"><i class="bx bx-edit-alt"></i> ลายเซ็นผู้รับ — กดเพื่อดู</span>
         </div>
