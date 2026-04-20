@@ -225,6 +225,9 @@ app.post('/api/jobs/update', async (req, res) => {
     const idxOf = name => headers.indexOf(name);
     const updates = [];
 
+    let sigPromise = null;
+    let sigTargets = null;
+
     if (action === 'cancel') {
       const cancelIdx = idxOf('Cancel');
       if (cancelIdx !== -1) {
@@ -245,34 +248,56 @@ app.post('/api/jobs/update', async (req, res) => {
         const remarkIdx = idxOf('Remark');
         if (remarkIdx !== -1 && remark) updates.push({ range: `${SHEET_NAME}!${colLetter(remarkIdx)}${rowNumber}`, values: [[remark]] });
 
+        // Kick off signature upload in parallel with status write — don't block
         if (signature && signature.startsWith('data:image')) {
-          try {
-            const sigUrl = await saveSignatureToDrive(key, signature);
-            const txt01Idx = idxOf('Txt_01');
-            const dropoffSigIdx = idxOf('Dropoff Signature');
-            if (txt01Idx !== -1) updates.push({ range: `${SHEET_NAME}!${colLetter(txt01Idx)}${rowNumber}`, values: [[sigUrl]] });
-            if (dropoffSigIdx !== -1) updates.push({ range: `${SHEET_NAME}!${colLetter(dropoffSigIdx)}${rowNumber}`, values: [[sigUrl]] });
-          } catch (sigErr) {
-            console.error('signature upload failed:', sigErr.message);
-            const dropoffSigIdx = idxOf('Dropoff Signature');
-            if (dropoffSigIdx !== -1) updates.push({ range: `${SHEET_NAME}!${colLetter(dropoffSigIdx)}${rowNumber}`, values: [[signature]] });
-          }
+          sigPromise = saveSignatureToDrive(key, signature);
+          sigTargets = {
+            txt01: idxOf('Txt_01'),
+            dropoffSig: idxOf('Dropoff Signature'),
+          };
         }
       }
     }
 
-    if (updates.length === 0) return res.json({ success: false, error: 'ไม่มีข้อมูลจะอัปเดต' });
+    if (updates.length === 0 && !sigPromise) {
+      return res.json({ success: false, error: 'ไม่มีข้อมูลจะอัปเดต' });
+    }
 
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: SHEET_ID,
-      requestBody: { valueInputOption: 'USER_ENTERED', data: updates },
-    });
+    // Run status batchUpdate + signature upload in parallel
+    const statusWritePromise = updates.length
+      ? sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: SHEET_ID,
+          requestBody: { valueInputOption: 'USER_ENTERED', data: updates },
+        })
+      : Promise.resolve();
+
+    // Wait for both; sig URL then gets written in a second (small) batchUpdate
+    const [, sigUrl] = await Promise.all([
+      statusWritePromise,
+      sigPromise ? sigPromise.catch(err => { console.error('signature upload failed:', err.message); return null; }) : Promise.resolve(null),
+    ]);
+
+    if (sigUrl && sigTargets) {
+      const sigUpdates = [];
+      if (sigTargets.txt01 !== -1) sigUpdates.push({ range: `${SHEET_NAME}!${colLetter(sigTargets.txt01)}${rowNumber}`, values: [[sigUrl]] });
+      if (sigTargets.dropoffSig !== -1) sigUpdates.push({ range: `${SHEET_NAME}!${colLetter(sigTargets.dropoffSig)}${rowNumber}`, values: [[sigUrl]] });
+      if (sigUpdates.length) {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: SHEET_ID,
+          requestBody: { valueInputOption: 'USER_ENTERED', data: sigUpdates },
+        });
+      }
+    }
 
     cached = { rows: null, ts: 0, sig: '' };
-    await refreshCache(true);
+    refreshCache(true).catch(() => {}); // fire-and-forget — SSE will catch up
     if (key) presenceMap.delete(key);
 
-    res.json({ success: true, message: action === 'cancel' ? 'ลบรายการเรียบร้อย' : 'อัปเดตข้อมูลสำเร็จ' });
+    res.json({
+      success: true,
+      message: action === 'cancel' ? 'ลบรายการเรียบร้อย' : 'อัปเดตข้อมูลสำเร็จ',
+      sigSaved: !!sigUrl,
+    });
   } catch (err) {
     console.error('update error:', err.message);
     res.status(500).json({ success: false, error: err.message });
