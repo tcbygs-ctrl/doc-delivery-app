@@ -996,7 +996,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sigPreview) {
       sigPreview.addEventListener('click', (e) => {
         e.stopPropagation();
-        showSignatureViewer(sigPreview.dataset.sigUrl, sigPreview.dataset.receiver);
+        const img = sigPreview.querySelector('img');
+        const src = img ? img.src : '';
+        showSignatureViewer(src, sigPreview.dataset.receiver);
       });
     }
 
