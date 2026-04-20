@@ -1299,10 +1299,17 @@ document.addEventListener('DOMContentLoaded', () => {
       footer.style.display = 'none';
       
       const sigUrl = job['Txt_01'] || job['Dropoff Signature'] || '';
-      if (sigUrl && sigUrl.startsWith('http')) {
+      if (isValidSignatureSrc(sigUrl)) {
         sigSection.style.display = 'flex';
         const wrap = document.getElementById('sigCanvasWrap');
-        wrap.innerHTML = `<img src="${sigUrl}" style="width:100%; height:100%; object-fit:contain; background:white; cursor:pointer;" onclick="document.getElementById('sigViewerImg').src='${sigUrl}'; document.getElementById('sigViewerLabel').textContent='ลายเซ็นผู้รับ: ${job['ชื่อผู้รับ'] || ''}'; document.querySelector('.sig-viewer-overlay').classList.add('active');">`;
+        const receiverName = (job['ชื่อผู้รับ'] || '').replace(/'/g, "\\'");
+        wrap.innerHTML = `<img src="${sigUrl}" style="width:100%; height:100%; object-fit:contain; background:white; cursor:pointer;" data-receiver="${receiverName}" />`;
+        const img = wrap.querySelector('img');
+        img.addEventListener('click', () => {
+          document.getElementById('sigViewerImg').src = sigUrl;
+          document.getElementById('sigViewerLabel').textContent = 'ลายเซ็นผู้รับ: ' + (job['ชื่อผู้รับ'] || '');
+          document.querySelector('.sig-viewer-overlay').classList.add('active');
+        });
         document.getElementById('sigClearBtn').style.display = 'none';
       }
     }
