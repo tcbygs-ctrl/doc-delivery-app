@@ -298,19 +298,24 @@ app.post('/api/presence/release', (req, res) => {
 });
 
 // ---- SSE (real-time push) ----
-app.get('/api/events', (req, res) => {
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
+// Only meaningful on a long-lived server. Serverless platforms kill idle
+// connections + can't run the background pollLoop, so we skip the endpoint
+// there and the client falls back to polling on connection error.
+if (!IS_SERVERLESS) {
+  app.get('/api/events', (req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    res.write(`: connected\n\n`);
+    res.write(`event: hello\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+    sseClients.add(res);
+    const ping = setInterval(() => { try { res.write(`: ping\n\n`); } catch {} }, 20000);
+    req.on('close', () => { clearInterval(ping); sseClients.delete(res); });
   });
-  res.write(`: connected\n\n`);
-  res.write(`event: hello\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
-  sseClients.add(res);
-  const ping = setInterval(() => { try { res.write(`: ping\n\n`); } catch {} }, 20000);
-  req.on('close', () => { clearInterval(ping); sseClients.delete(res); });
-});
+}
 
 app.get('/api/health', (req, res) => {
   res.json({
