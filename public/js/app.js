@@ -1439,7 +1439,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function getSignatureData() {
-    return canvas.toDataURL('image/png');
+    return compressSignature(canvas);
+  }
+
+  // Downscale signature canvas to ≤600px width + export as JPEG 0.82
+  // Reduces payload from ~50KB PNG → ~5-10KB JPEG, making Drive upload much faster
+  function compressSignature(srcCanvas) {
+    const MAX_W = 600;
+    const scale = Math.min(1, MAX_W / srcCanvas.width);
+    const w = Math.round(srcCanvas.width * scale);
+    const h = Math.round(srcCanvas.height * scale);
+    const tmp = document.createElement('canvas');
+    tmp.width = w; tmp.height = h;
+    const tctx = tmp.getContext('2d');
+    tctx.fillStyle = '#fff';
+    tctx.fillRect(0, 0, w, h);
+    tctx.drawImage(srcCanvas, 0, 0, w, h);
+    return tmp.toDataURL('image/jpeg', 0.82);
   }
 
   function resizeCanvas() {
