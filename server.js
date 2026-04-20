@@ -12,11 +12,21 @@ const CREDS_PATH = process.env.GOOGLE_CREDENTIALS_PATH || './reflected-drake-427
 const POLL_MS = parseInt(process.env.SHEETS_POLL_MS || '2500', 10);
 
 // ---- Google APIs ----
-const auth = new google.auth.GoogleAuth({
-  keyFile: path.resolve(CREDS_PATH),
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
+// On hosted platforms (Vercel/Railway/etc), credentials come from env var
+// since the JSON keyfile is gitignored. Locally, we fall back to the file path.
+function buildAuthOptions() {
+  const raw = process.env.GOOGLE_CREDENTIALS_JSON;
+  const scopes = ['https://www.googleapis.com/auth/spreadsheets'];
+  if (raw && raw.trim()) {
+    const text = raw.trim().startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
+    return { credentials: JSON.parse(text), scopes };
+  }
+  return { keyFile: path.resolve(CREDS_PATH), scopes };
+}
+const auth = new google.auth.GoogleAuth(buildAuthOptions());
 const sheets = google.sheets({ version: 'v4', auth });
+
+const IS_SERVERLESS = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
