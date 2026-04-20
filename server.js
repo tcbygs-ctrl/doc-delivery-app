@@ -46,6 +46,20 @@ function colLetter(idx) {
   return s;
 }
 
+// Parse Thai-formatted date "d/m/yyyy h:m:s" (Buddhist Era year ≥2500) to epoch ms.
+// Returns 0 if unparseable — those rows sink to the bottom of desc sort.
+function parseThaiDate(s) {
+  if (!s) return 0;
+  const m = String(s).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[\sT]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (!m) return 0;
+  let [, d, mo, y, h, mi, se] = m;
+  let year = parseInt(y, 10);
+  if (year > 2500) year -= 543; // BE → CE
+  const dt = new Date(year, parseInt(mo) - 1, parseInt(d), parseInt(h || '0'), parseInt(mi || '0'), parseInt(se || '0'));
+  const t = dt.getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
 // ---- Core fetch ----
 async function fetchRowsFromSheets() {
   const resp = await sheets.spreadsheets.values.get({
