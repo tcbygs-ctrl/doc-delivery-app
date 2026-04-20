@@ -328,6 +328,36 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Diagnostic endpoint — safe: reports presence of env vars without leaking values.
+// Use this to verify Vercel env vars are actually reaching the function.
+app.get('/api/debug', (req, res) => {
+  const raw = process.env.GOOGLE_CREDENTIALS_JSON || '';
+  let credMode = 'file';
+  let credEmail = null;
+  let credError = null;
+  if (raw.trim()) {
+    credMode = 'env-json';
+    try {
+      const text = raw.trim().startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
+      const parsed = JSON.parse(text);
+      credEmail = parsed.client_email || null;
+    } catch (e) {
+      credError = e.message;
+    }
+  }
+  res.json({
+    serverless: IS_SERVERLESS,
+    platform: process.env.VERCEL ? 'vercel' : (process.env.AWS_LAMBDA_FUNCTION_NAME ? 'lambda' : 'local'),
+    env: {
+      GOOGLE_CREDENTIALS_JSON_set: !!raw,
+      GOOGLE_CREDENTIALS_JSON_length: raw.length,
+      SHEET_ID_set: !!process.env.SHEET_ID,
+      SHEET_NAME: process.env.SHEET_NAME || '(default: Job)',
+    },
+    credentials: { mode: credMode, client_email: credEmail, parseError: credError },
+  });
+});
+
 // ---- Background poller for real-time ----
 async function pollLoop() {
   try { await refreshCache(true); }
