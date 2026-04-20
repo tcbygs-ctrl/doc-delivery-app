@@ -1139,7 +1139,7 @@ document.addEventListener('DOMContentLoaded', () => {
       batchSigConfirmBtn.disabled = true;
       batchSigConfirmLabel.textContent = 'กำลังบันทึก...';
       
-      const sigBase64 = bCanvas.toDataURL('image/png');
+      const sigBase64 = compressSignature(bCanvas);
       const now = new Date().toLocaleString('th-TH');
       
       await batchUpdateStatus(pendingBatchKeys, 'Finished', {
