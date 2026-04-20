@@ -335,15 +335,20 @@ async function pollLoop() {
   finally { setTimeout(pollLoop, POLL_MS); }
 }
 
-app.listen(PORT, async () => {
-  console.log(`\n🚀 DocDelivery App → http://localhost:${PORT}`);
-  console.log(`   Poll interval: ${POLL_MS}ms | SSE stream: /api/events\n`);
-  try {
-    await refreshCache(true);
-    console.log(`✅ Sheets API connected. ${cached.rows.length} rows cached.\n`);
-  } catch (err) {
-    console.error('❌ Sheets API error:', err.message);
-    console.error('   ตรวจสอบ: (1) share Sheet ให้ service account, (2) path credentials JSON ถูกต้อง\n');
-  }
-  pollLoop();
-});
+if (!IS_SERVERLESS) {
+  app.listen(PORT, async () => {
+    console.log(`\n🚀 DocDelivery App → http://localhost:${PORT}`);
+    console.log(`   Poll interval: ${POLL_MS}ms | SSE stream: /api/events\n`);
+    try {
+      await refreshCache(true);
+      console.log(`✅ Sheets API connected. ${cached.rows.length} rows cached.\n`);
+    } catch (err) {
+      console.error('❌ Sheets API error:', err.message);
+      console.error('   ตรวจสอบ: (1) share Sheet ให้ service account, (2) credentials ถูกต้อง\n');
+    }
+    pollLoop();
+  });
+}
+
+// Vercel / other serverless hosts import the app directly
+module.exports = app;
