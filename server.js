@@ -15,13 +15,9 @@ const POLL_MS = parseInt(process.env.SHEETS_POLL_MS || '2500', 10);
 // ---- Google APIs ----
 const auth = new google.auth.GoogleAuth({
   keyFile: path.resolve(CREDS_PATH),
-  scopes: [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive',
-  ],
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 const sheets = google.sheets({ version: 'v4', auth });
-const drive = google.drive({ version: 'v3', auth });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
