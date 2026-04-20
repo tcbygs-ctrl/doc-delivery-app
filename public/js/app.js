@@ -291,9 +291,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // ========================
   // REAL-TIME STREAM (SSE)
   // ========================
-  let sseSource = null;
-  let sseBackoff = 1000;
-  let sseFallbackTimer = null;
+  // var (hoisted) so initRealtimeStream() called earlier in DOMContentLoaded
+  // can reference these without hitting the TDZ of let-declarations below.
+  var sseSource = null;
+  var sseBackoff = 1000;
+  var sseFallbackTimer = null;
 
   function initRealtimeStream() {
     if (typeof EventSource === 'undefined') {
