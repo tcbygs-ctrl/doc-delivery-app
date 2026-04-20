@@ -164,45 +164,6 @@ async function findRowByKey(key) {
   return null;
 }
 
-// Resolve folder once at startup, cache the ID
-let cachedFolderId = SIGNATURE_FOLDER_ID || null;
-
-async function resolveSignatureFolder() {
-  if (cachedFolderId) return cachedFolderId;
-  const q = `name='DocDelivery_Signatures' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-  const list = await drive.files.list({ q, fields: 'files(id,name)' });
-  if (list.data.files && list.data.files.length > 0) {
-    cachedFolderId = list.data.files[0].id;
-  } else {
-    const created = await drive.files.create({
-      requestBody: { name: 'DocDelivery_Signatures', mimeType: 'application/vnd.google-apps.folder' },
-      fields: 'id',
-    });
-    cachedFolderId = created.data.id;
-    await drive.permissions.create({ fileId: cachedFolderId, requestBody: { role: 'reader', type: 'anyone' } });
-  }
-  return cachedFolderId;
-}
-
-async function saveSignatureToDrive(key, base64Data) {
-  const parts = base64Data.split(',');
-  const mimeMatch = parts[0].match(/:(.*?);/);
-  const mime = mimeMatch ? mimeMatch[1] : 'image/png';
-  const buffer = Buffer.from(parts[1], 'base64');
-  const ext = mime.includes('jpeg') ? 'jpg' : (mime.includes('webp') ? 'webp' : 'png');
-  const folderId = await resolveSignatureFolder();
-
-  const fileRes = await drive.files.create({
-    requestBody: { name: `sig_${key}.${ext}`, parents: [folderId] },
-    media: { mimeType: mime, body: Readable.from(buffer) },
-    fields: 'id',
-  });
-  const fileId = fileRes.data.id;
-  // Public read needed for thumbnail URL to load in browser
-  await drive.permissions.create({ fileId, requestBody: { role: 'reader', type: 'anyone' } });
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
-}
-
 app.post('/api/jobs/update', async (req, res) => {
   try {
     cleanPresence();
