@@ -977,8 +977,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ${branch ? `<span class="branch-tag">${branch}</span>` : ''}
         ${statusPill}
       </div>
-      ${type === 'finished' && sigUrl && sigUrl.startsWith('http') ? `
-        <div class="sig-preview-wrap" data-sig-url="${sigUrl}" data-receiver="${receiver}">
+      ${type === 'finished' && isValidSignatureSrc(sigUrl) ? `
+        <div class="sig-preview-wrap" data-sig-url="${escapeAttr(sigUrl)}" data-receiver="${receiver}">
           <img class="sig-preview-img" src="${sigUrl}" alt="ลายเซ็น" loading="lazy" onerror="this.parentElement.style.display='none'" />
           <span class="sig-preview-text"><i class="bx bx-edit-alt"></i> ลายเซ็นผู้รับ — กดเพื่อดู</span>
         </div>
