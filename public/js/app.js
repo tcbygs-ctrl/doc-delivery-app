@@ -288,6 +288,53 @@ document.addEventListener('DOMContentLoaded', () => {
     syncLabel.textContent = label;
   }
 
+  // ========================
+  // REAL-TIME STREAM (SSE)
+  // ========================
+  let sseSource = null;
+  let sseBackoff = 1000;
+  let sseFallbackTimer = null;
+
+  function initRealtimeStream() {
+    if (typeof EventSource === 'undefined') {
+      // Fallback to polling for old browsers
+      setInterval(() => fetchData(false), 15000);
+      return;
+    }
+    connectSSE();
+  }
+
+  function connectSSE() {
+    try {
+      if (sseSource) sseSource.close();
+      sseSource = new EventSource('/api/events');
+
+      sseSource.addEventListener('hello', () => {
+        sseBackoff = 1000;
+        if (sseFallbackTimer) { clearInterval(sseFallbackTimer); sseFallbackTimer = null; }
+      });
+
+      sseSource.addEventListener('jobs', () => {
+        fetchData(false);
+        if (currentTab === 'finished') fetchFinishedJobs(true);
+      });
+
+      sseSource.onerror = () => {
+        if (sseSource) sseSource.close();
+        sseSource = null;
+        // Start short-interval polling fallback until reconnect
+        if (!sseFallbackTimer) {
+          sseFallbackTimer = setInterval(() => fetchData(false), 10000);
+        }
+        sseBackoff = Math.min(sseBackoff * 2, 15000);
+        setTimeout(connectSSE, sseBackoff);
+      };
+    } catch (e) {
+      console.warn('SSE init failed, using polling', e);
+      setInterval(() => fetchData(false), 15000);
+    }
+  }
+
   function processRawData(rows) {
     data.pending = [];
     data.started = [];
