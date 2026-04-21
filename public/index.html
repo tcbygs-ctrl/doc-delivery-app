@@ -284,10 +284,15 @@
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
   <script src="/js/app.js"></script>
-  <!-- Vercel Speed Insights -->
+  <!-- Vercel Speed Insights (โหลดเฉพาะตอน deploy บน Vercel เท่านั้น) -->
   <script>
-    window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+    if (location.hostname.endsWith('.vercel.app')) {
+      window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+      var s = document.createElement('script');
+      s.defer = true;
+      s.src = '/_vercel/speed-insights/script.js';
+      document.head.appendChild(s);
+    }
   </script>
-  <script defer src="/_vercel/speed-insights/script.js"></script>
 </body>
 </html>
