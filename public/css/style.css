@@ -869,6 +869,12 @@ h3 {
   min-width: 0;
 }
 
+.dept-name::before {
+  content: "/ ";
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
 .card-footer {
   margin-top: 12px;
   padding-top: 10px;
