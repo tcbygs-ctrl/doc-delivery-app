@@ -678,7 +678,7 @@ h3 {
   padding: 6px 12px;
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-left: 4px solid var(--accent);
+  border-left: 4px solid var(--accent-blue);
   border-radius: 8px;
   display: flex;
   align-items: center;
