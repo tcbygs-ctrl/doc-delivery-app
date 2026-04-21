@@ -966,7 +966,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="card-key">${key}</span>
           ${lockedBy ? `<span class="presence-lock" title="กำลังถูกใช้งานโดย ${lockedBy.name}"><i class="bx bxs-user-circle"></i><span class="presence-name">${lockedBy.name}</span></span>` : ''}
         </div>
-        <span class="card-time">${job['เวลาทำรายการ'] || ''}</span>
+        <span class="card-time">${type === 'finished' ? (job['Dropoff'] || job['เวลาทำรายการ'] || '') : (job['เวลาทำรายการ'] || '')}</span>
       </div>
       <div class="card-body">
         ${infoHtml}
