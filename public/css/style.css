@@ -671,22 +671,22 @@ h3 {
 }
 
 .group-dept-header {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin: 12px 0 8px 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 16px 0 8px 0;
+  padding: 6px 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .group-dept-header::before {
-  content: '';
-  display: block;
-  width: 4px;
-  height: 12px;
-  background: var(--border);
-  border-radius: 2px;
+  content: none;
 }
 
 .job-card {
