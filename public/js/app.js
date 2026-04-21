@@ -947,7 +947,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           <div class="info-text">
             <div class="user-name">ผู้รับ: ${receiver}</div>
-            <div class="dept-name">เวลารับ: ${job['Dropoff'] || job['เวลาทำรายการ'] || '-'}</div>
+            <div class="dept-name">${job['แผนก ปลายทาง'] || ''}</div>
           </div>
         </div>
       `;
