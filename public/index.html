@@ -335,6 +335,20 @@
         </button>
       </div>
       <div class="monitor-summary" id="monitorSummary"></div>
+      <div class="monitor-filter-bar">
+        <div class="monitor-filter-chips" id="monitorFilterStatus">
+          <button type="button" class="mf-chip mf-chip-active" data-status="">ทั้งหมด</button>
+          <button type="button" class="mf-chip" data-status="pending">รอรับ</button>
+          <button type="button" class="mf-chip" data-status="started">กำลังส่ง</button>
+          <button type="button" class="mf-chip" data-status="finished">สำเร็จ</button>
+          <button type="button" class="mf-chip" data-status="error">ล้มเหลว</button>
+        </div>
+        <div class="monitor-filter-date">
+          <label class="mf-date-label" for="monitorFilterDate">วันที่</label>
+          <input type="date" id="monitorFilterDate" class="mf-date-input" title="กรองตามวันที่โหลด">
+          <button type="button" class="mf-date-clear hidden" id="monitorFilterDateClear" aria-label="ล้างวันที่">✕</button>
+        </div>
+      </div>
       <div class="monitor-log-list" id="monitorLogList"></div>
     </div>
   </div>
