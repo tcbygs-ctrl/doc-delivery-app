@@ -312,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       renderBranchChips('finished');
       renderTab('finished');
-      logLoad(`ประวัติส่งสำเร็จ (หน้า ${finishedPage})`, json.data.length, true);
+      logLoad(`ประวัติส่งสำเร็จ (หน้า ${finishedPage})`, json.data.length, true, null, snapshotRecords(json.data));
 
     } catch (err) {
       console.error('fetchFinishedJobs error:', err);
