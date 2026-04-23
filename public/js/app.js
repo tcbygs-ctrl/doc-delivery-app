@@ -1912,7 +1912,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     listEl.innerHTML = filtered.map((log, idx) => {
-      // ใช้ idx ใน filtered list (ไม่ขึ้นกับ loadLog index)
       const badge = log.success
         ? '<span class="monitor-log-badge badge-ok">✓ สำเร็จ</span>'
         : '<span class="monitor-log-badge badge-err">✗ ล้มเหลว</span>';
