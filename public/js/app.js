@@ -2066,4 +2066,29 @@ document.addEventListener('DOMContentLoaded', () => {
   monitorPinCancel.addEventListener('click', closePinModal);
   monitorPinOverlay.addEventListener('click', e => { if (e.target === monitorPinOverlay) closePinModal(); });
   monitorPanelClose.addEventListener('click', () => monitorPanel.classList.add('hidden'));
+
+  // Filter chips
+  document.getElementById('monitorFilterStatus').addEventListener('click', e => {
+    const chip = e.target.closest('.mf-chip');
+    if (!chip) return;
+    document.querySelectorAll('.mf-chip').forEach(c => c.classList.remove('mf-chip-active'));
+    chip.classList.add('mf-chip-active');
+    monitorFilterStatus = chip.dataset.status;
+    renderMonitorPanel();
+  });
+
+  // Date filter
+  const monitorFilterDate = document.getElementById('monitorFilterDate');
+  const monitorFilterDateClear = document.getElementById('monitorFilterDateClear');
+  monitorFilterDate.addEventListener('change', () => {
+    monitorFilterDate_val = monitorFilterDate.value;
+    monitorFilterDateClear.classList.toggle('hidden', !monitorFilterDate.value);
+    renderMonitorPanel();
+  });
+  monitorFilterDateClear.addEventListener('click', () => {
+    monitorFilterDate.value = '';
+    monitorFilterDate_val = '';
+    monitorFilterDateClear.classList.add('hidden');
+    renderMonitorPanel();
+  });
 });
