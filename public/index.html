@@ -297,5 +297,46 @@
       document.head.appendChild(s);
     }
   </script>
+
+  <!-- Monitor PIN Modal -->
+  <div id="monitorPinOverlay" class="monitor-overlay hidden" role="dialog" aria-modal="true" aria-label="ป้อน PIN">
+    <div class="monitor-pin-box">
+      <div class="monitor-pin-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="7 10 10 13 17 7"/></svg>
+        ตรวจสอบการโหลดข้อมูล
+      </div>
+      <p class="monitor-pin-desc">กรุณาป้อน PIN เพื่อเข้าถึงข้อมูลการโหลด</p>
+      <div class="monitor-pin-inputs" id="monitorPinInputs">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
+      </div>
+      <p class="monitor-pin-error hidden" id="monitorPinError">PIN ไม่ถูกต้อง กรุณาลองใหม่</p>
+      <button class="monitor-pin-cancel" id="monitorPinCancel">ยกเลิก</button>
+    </div>
+  </div>
+
+  <!-- Monitor Panel -->
+  <div id="monitorPanel" class="monitor-panel hidden" role="dialog" aria-modal="true" aria-label="ข้อมูลการโหลด">
+    <div class="monitor-panel-inner">
+      <div class="monitor-panel-head">
+        <div class="monitor-panel-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="7 10 10 13 17 7"/></svg>
+          บันทึกการโหลดข้อมูล
+        </div>
+        <button class="monitor-panel-close" id="monitorPanelClose" aria-label="ปิด">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="monitor-summary" id="monitorSummary"></div>
+      <div class="monitor-log-list" id="monitorLogList"></div>
+    </div>
+  </div>
 </body>
 </html>
