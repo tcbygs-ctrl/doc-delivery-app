@@ -1857,21 +1857,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Monitor filter state
   let monitorFilterStatus = '';
-  let monitorFilterDate = '';
+  let monitorFilterDateVal = '';
 
   function applyMonitorFilters(logs) {
     return logs.filter(log => {
       if (monitorFilterStatus) {
         if (monitorFilterStatus === 'error' && log.success) return false;
-        if (monitorFilterStatus === 'pending' && (log.name.indexOf('Pending') === -1)) return false;
-        if (monitorFilterStatus === 'started' && (log.name.indexOf('Started') === -1)) return false;
-        if (monitorFilterStatus === 'finished' && (log.name.indexOf('สำเร็จ') === -1)) return false;
+        if (monitorFilterStatus === 'pending' && log.name.indexOf('Pending') === -1) return false;
+        if (monitorFilterStatus === 'started' && log.name.indexOf('Started') === -1) return false;
+        if (monitorFilterStatus === 'finished' && log.name.indexOf('สำเร็จ') === -1) return false;
         if (monitorFilterStatus === 'error' && log.success) return false;
       }
-      if (monitorFilterDate) {
+      if (monitorFilterDateVal) {
         const logDate = new Date(log.ts);
         const ymd = `${logDate.getFullYear()}-${String(logDate.getMonth()+1).padStart(2,'0')}-${String(logDate.getDate()).padStart(2,'0')}`;
-        if (ymd !== monitorFilterDate) return false;
+        if (ymd !== monitorFilterDateVal) return false;
       }
       return true;
     });
