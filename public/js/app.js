@@ -41,12 +41,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const loadLog = loadLogFromStorage();
 
-  function snapshotRecords(rows, deptField = 'แผนก ปลายทาง') {
+  function snapshotRecords(rows, deptField = 'แผนก ปลายทาง', timeField = 'เวลาทำรายการ') {
     return rows.map(r => ({
       k: r.Key || '',
       s: r['ชื่อผู้ส่ง'] || '',
       d: r[deptField] || r['แผนก ต้นทาง'] || r['แผนก ปลายทาง'] || '',
-      t: r['เวลาทำรายการ'] || r['Dropoff'] || ''
+      t: r[timeField] || ''
     }));
   }
 
