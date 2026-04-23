@@ -18,6 +18,14 @@ document.addEventListener('DOMContentLoaded', () => {
   let sortOrderPending = 'desc';
   let filterTodayPending = false;
 
+  // === Monitor / Data-Load Log ===
+  const MONITOR_PIN = '638796796';
+  const loadLog = []; // { name, count, ts, success, error }
+  function logLoad(name, count, success, error = null) {
+    loadLog.unshift({ name, count, ts: Date.now(), success, error });
+    if (loadLog.length > 200) loadLog.pop();
+  }
+
   // === DOM Elements ===
   const navBtns = document.querySelectorAll('.nav-btn');
   const panels = document.querySelectorAll('.tab-panel');
