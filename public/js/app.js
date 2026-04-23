@@ -2078,16 +2078,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Date filter
-  const monitorFilterDate = document.getElementById('monitorFilterDate');
+  const monitorFilterDateInput = document.getElementById('monitorFilterDate');
   const monitorFilterDateClear = document.getElementById('monitorFilterDateClear');
-  monitorFilterDate.addEventListener('change', () => {
-    monitorFilterDate_val = monitorFilterDate.value;
-    monitorFilterDateClear.classList.toggle('hidden', !monitorFilterDate.value);
+  monitorFilterDateInput.addEventListener('change', () => {
+    monitorFilterDateVal = monitorFilterDateInput.value;
+    monitorFilterDateClear.classList.toggle('hidden', !monitorFilterDateInput.value);
     renderMonitorPanel();
   });
   monitorFilterDateClear.addEventListener('click', () => {
-    monitorFilterDate.value = '';
-    monitorFilterDate_val = '';
+    monitorFilterDateInput.value = '';
+    monitorFilterDateVal = '';
     monitorFilterDateClear.classList.add('hidden');
     renderMonitorPanel();
   });
