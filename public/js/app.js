@@ -1895,26 +1895,65 @@ document.addEventListener('DOMContentLoaded', () => {
       const errorDetail = !log.success && log.error
         ? `<div class="monitor-log-errtext">${log.error}</div>` : '';
       const recs = log.records || [];
+      const loadedAt = log.success
+        ? `<div class="monitor-loaded-at">โหลดสำเร็จเมื่อ: <strong>${formatTs(log.ts)}</strong> (${timeAgo(log.ts)})</div>`
+        : '';
       const expandBtn = recs.length
         ? `<button type="button" class="monitor-expand-btn" data-idx="${idx}">
              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
              ดูรายการ (${recs.length})
            </button>` : '';
-      const recRows = recs.map(r =>
-        `<tr>
-          <td class="mrt-key">${r.k || '—'}</td>
-          <td class="mrt-sender">${r.s || '—'}</td>
-          <td class="mrt-dept">${r.d || '—'}</td>
-          <td class="mrt-time">${r.t || '—'}</td>
-        </tr>`
-      ).join('');
-      const recTable = recs.length ? `
-        <div class="monitor-rec-wrap hidden" id="mrec-${idx}">
-          <table class="monitor-rec-table">
-            <thead><tr><th>รหัส</th><th>ผู้ส่ง</th><th>แผนกปลายทาง</th><th>เวลา</th></tr></thead>
-            <tbody>${recRows}</tbody>
-          </table>
-        </div>` : '';
+
+      let recTableHtml = '';
+      if (recs.length) {
+        if (log.groupByDept) {
+          // Group by แผนก ต้นทาง
+          const groups = {};
+          recs.forEach(r => {
+            const dept = r.d || 'ไม่ระบุแผนก';
+            if (!groups[dept]) groups[dept] = [];
+            groups[dept].push(r);
+          });
+          const groupedRows = Object.entries(groups).map(([dept, items]) =>
+            `<tr class="mrt-dept-group"><td colspan="3">
+               <span class="mrt-dept-label">${dept}</span>
+               <span class="mrt-dept-count">${items.length} รายการ</span>
+             </td></tr>` +
+            items.map(r =>
+              `<tr>
+                <td class="mrt-key">${r.k || '—'}</td>
+                <td class="mrt-sender">${r.s || '—'}</td>
+                <td class="mrt-time">${r.t || '—'}</td>
+              </tr>`
+            ).join('')
+          ).join('');
+          recTableHtml = `
+            <div class="monitor-rec-wrap hidden" id="mrec-${idx}">
+              ${loadedAt}
+              <table class="monitor-rec-table">
+                <thead><tr><th>รหัส</th><th>ผู้ส่ง</th><th>เวลาทำรายการ</th></tr></thead>
+                <tbody>${groupedRows}</tbody>
+              </table>
+            </div>`;
+        } else {
+          const flatRows = recs.map(r =>
+            `<tr>
+              <td class="mrt-key">${r.k || '—'}</td>
+              <td class="mrt-sender">${r.s || '—'}</td>
+              <td class="mrt-dept">${r.d || '—'}</td>
+              <td class="mrt-time">${r.t || '—'}</td>
+            </tr>`
+          ).join('');
+          recTableHtml = `
+            <div class="monitor-rec-wrap hidden" id="mrec-${idx}">
+              ${loadedAt}
+              <table class="monitor-rec-table">
+                <thead><tr><th>รหัส</th><th>ผู้ส่ง</th><th>แผนกปลายทาง</th><th>เวลาทำรายการ</th></tr></thead>
+                <tbody>${flatRows}</tbody>
+              </table>
+            </div>`;
+        }
+      }
       return `
         <div class="monitor-log-item ${itemClass}">
           <div class="monitor-log-name">${log.name}${badge}</div>
