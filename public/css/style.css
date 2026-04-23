@@ -1715,6 +1715,7 @@ h3 {
 .pin-digit.pin-error {
   border-color: #ef4444;
   animation: pinShake 0.35s ease;
+  will-change: transform;
 }
 @keyframes pinShake {
   0%,100% { transform: translateX(0); }
