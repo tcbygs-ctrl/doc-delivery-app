@@ -41,9 +41,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const loadLog = loadLogFromStorage();
 
-  function logLoad(name, count, success, error = null) {
-    loadLog.unshift({ name, count, ts: Date.now(), success, error });
-    // ตัดรายการเกิน 7 วันออก
+  function snapshotRecords(rows) {
+    return rows.map(r => ({
+      k: r.Key || '',
+      s: r['ชื่อผู้ส่ง'] || '',
+      d: r['แผนก ปลายทาง'] || r['แผนก ต้นทาง'] || '',
+      t: r['เวลาทำรายการ'] || r['Dropoff'] || ''
+    }));
+  }
+
+  function logLoad(name, count, success, error = null, records = []) {
+    loadLog.unshift({ name, count, ts: Date.now(), success, error, records });
     const cutoff = Date.now() - MONITOR_RETENTION_MS;
     while (loadLog.length && loadLog[loadLog.length - 1].ts < cutoff) loadLog.pop();
     saveLogToStorage(loadLog);
