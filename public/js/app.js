@@ -20,10 +20,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // === Monitor / Data-Load Log ===
   const MONITOR_PIN = '638796796';
-  const loadLog = []; // { name, count, ts, success, error }
+  const MONITOR_LS_KEY = 'docdelivery_loadlog';
+  const MONITOR_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 7 วัน
+
+  function loadLogFromStorage() {
+    try {
+      const raw = localStorage.getItem(MONITOR_LS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      const cutoff = Date.now() - MONITOR_RETENTION_MS;
+      return parsed.filter(e => e.ts >= cutoff);
+    } catch { return []; }
+  }
+
+  function saveLogToStorage(log) {
+    try {
+      localStorage.setItem(MONITOR_LS_KEY, JSON.stringify(log));
+    } catch { /* storage full — skip */ }
+  }
+
+  const loadLog = loadLogFromStorage();
+
   function logLoad(name, count, success, error = null) {
     loadLog.unshift({ name, count, ts: Date.now(), success, error });
-    if (loadLog.length > 200) loadLog.pop();
+    // ตัดรายการเกิน 7 วันออก
+    const cutoff = Date.now() - MONITOR_RETENTION_MS;
+    while (loadLog.length && loadLog[loadLog.length - 1].ts < cutoff) loadLog.pop();
+    saveLogToStorage(loadLog);
   }
 
   // === DOM Elements ===
