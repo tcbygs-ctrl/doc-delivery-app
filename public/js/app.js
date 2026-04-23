@@ -1886,22 +1886,57 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    listEl.innerHTML = loadLog.map(log => {
+    listEl.innerHTML = loadLog.map((log, idx) => {
       const badge = log.success
         ? '<span class="monitor-log-badge badge-ok">✓ สำเร็จ</span>'
         : '<span class="monitor-log-badge badge-err">✗ ล้มเหลว</span>';
       const countClass = log.count === 0 ? 'log-zero' : '';
       const itemClass = log.success ? 'log-success' : 'log-error';
-      const detail = !log.success && log.error ? `<div class="monitor-log-time" style="color:#ef4444;font-size:10px">${log.error}</div>` : '';
+      const errorDetail = !log.success && log.error
+        ? `<div class="monitor-log-errtext">${log.error}</div>` : '';
+      const recs = log.records || [];
+      const expandBtn = recs.length
+        ? `<button type="button" class="monitor-expand-btn" data-idx="${idx}">
+             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+             ดูรายการ (${recs.length})
+           </button>` : '';
+      const recRows = recs.map(r =>
+        `<tr>
+          <td class="mrt-key">${r.k || '—'}</td>
+          <td class="mrt-sender">${r.s || '—'}</td>
+          <td class="mrt-dept">${r.d || '—'}</td>
+          <td class="mrt-time">${r.t || '—'}</td>
+        </tr>`
+      ).join('');
+      const recTable = recs.length ? `
+        <div class="monitor-rec-wrap hidden" id="mrec-${idx}">
+          <table class="monitor-rec-table">
+            <thead><tr><th>รหัส</th><th>ผู้ส่ง</th><th>แผนกปลายทาง</th><th>เวลา</th></tr></thead>
+            <tbody>${recRows}</tbody>
+          </table>
+        </div>` : '';
       return `
         <div class="monitor-log-item ${itemClass}">
           <div class="monitor-log-name">${log.name}${badge}</div>
           <div class="monitor-log-count ${countClass}">${log.success ? log.count + ' รายการ' : '—'}</div>
           <div class="monitor-log-time">${formatTs(log.ts)}</div>
           <div class="monitor-log-ago">${timeAgo(log.ts)}</div>
-          ${detail}
+          ${errorDetail}
+          ${expandBtn}
+          ${recTable}
         </div>`;
     }).join('');
+
+    // expand/collapse toggle
+    listEl.querySelectorAll('.monitor-expand-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const wrap = listEl.querySelector(`#mrec-${btn.dataset.idx}`);
+        if (!wrap) return;
+        const open = !wrap.classList.contains('hidden');
+        wrap.classList.toggle('hidden', open);
+        btn.classList.toggle('expanded', !open);
+      });
+    });
   }
 
   // PIN flow
