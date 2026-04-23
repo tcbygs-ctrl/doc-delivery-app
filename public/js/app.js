@@ -268,8 +268,8 @@ document.addEventListener('DOMContentLoaded', () => {
       renderBranchChips('pending'); renderTab('pending');
       renderBranchChips('started'); renderTab('started');
       setSyncStatus('online', 'ออนไลน์');
-      logLoad('งานรอรับ (Pending)', data.pending.length, true, null, snapshotRecords(data.pending));
-      logLoad('งานกำลังส่ง (Started)', data.started.length, true, null, snapshotRecords(data.started));
+      logLoad('งานรอรับ (Pending)', data.pending.length, true, null, snapshotRecords(data.pending, 'แผนก ต้นทาง'), true);
+      logLoad('งานกำลังส่ง (Started)', data.started.length, true, null, snapshotRecords(data.started, 'แผนก ปลายทาง'), false);
     } catch (err) {
       console.error(err);
       setSyncStatus('error', 'ออฟไลน์');
