@@ -237,9 +237,12 @@ document.addEventListener('DOMContentLoaded', () => {
       renderBranchChips('pending'); renderTab('pending');
       renderBranchChips('started'); renderTab('started');
       setSyncStatus('online', 'ออนไลน์');
+      logLoad('งานรอรับ (Pending)', data.pending.length, true);
+      logLoad('งานกำลังส่ง (Started)', data.started.length, true);
     } catch (err) {
       console.error(err);
       setSyncStatus('error', 'ออฟไลน์');
+      logLoad('งานรอรับ / กำลังส่ง', 0, false, err.message);
       if (force) showToast('ไม่สามารถดึงข้อมูลได้', 'error');
     }
   }
