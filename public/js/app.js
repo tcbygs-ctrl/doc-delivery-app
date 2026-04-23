@@ -278,12 +278,14 @@ document.addEventListener('DOMContentLoaded', () => {
       
       finishedHasMore = json.hasMore;
       totalFinishedCount = json.total || data.finished.length;
-      
+
       renderBranchChips('finished');
       renderTab('finished');
-      
+      logLoad(`ประวัติส่งสำเร็จ (หน้า ${finishedPage})`, json.data.length, true);
+
     } catch (err) {
       console.error('fetchFinishedJobs error:', err);
+      logLoad('ประวัติส่งสำเร็จ', 0, false, err.message);
       showToast('ไม่สามารถดึงข้อมูลประวัติได้', 'error');
     } finally {
       isFetchingFinished = false;
