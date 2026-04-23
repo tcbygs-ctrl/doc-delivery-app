@@ -1805,4 +1805,131 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
   }
+
+  // ========================
+  // MONITOR / DATA-LOAD LOG
+  // ========================
+  function timeAgo(ts) {
+    const diff = Math.floor((Date.now() - ts) / 1000);
+    if (diff < 60) return `${diff} วินาทีที่แล้ว`;
+    if (diff < 3600) return `${Math.floor(diff / 60)} นาทีที่แล้ว`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} ชั่วโมงที่แล้ว`;
+    return `${Math.floor(diff / 86400)} วันที่แล้ว`;
+  }
+
+  function formatTs(ts) {
+    return new Date(ts).toLocaleString('th-TH', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  }
+
+  function renderMonitorPanel() {
+    const summaryEl = document.getElementById('monitorSummary');
+    const listEl = document.getElementById('monitorLogList');
+
+    const successLogs = loadLog.filter(l => l.success);
+    const totalRecords = data.pending.length + data.started.length + totalFinishedCount;
+    const lastLoad = loadLog.find(l => l.success);
+
+    summaryEl.innerHTML = `
+      <div class="monitor-stat">
+        <div class="monitor-stat-label">รายการทั้งหมดบนหน้าจอ</div>
+        <div class="monitor-stat-value">${totalRecords.toLocaleString()}</div>
+        <div class="monitor-stat-sub">รอรับ ${data.pending.length} · ส่ง ${data.started.length} · สำเร็จ ${totalFinishedCount}</div>
+      </div>
+      <div class="monitor-stat">
+        <div class="monitor-stat-label">โหลดสำเร็จทั้งหมด</div>
+        <div class="monitor-stat-value">${successLogs.length}</div>
+        <div class="monitor-stat-sub">ล้มเหลว ${loadLog.length - successLogs.length} ครั้ง</div>
+      </div>
+      <div class="monitor-stat">
+        <div class="monitor-stat-label">โหลดล่าสุดเมื่อ</div>
+        <div class="monitor-stat-value" style="font-size:14px;line-height:1.4">${lastLoad ? timeAgo(lastLoad.ts) : '—'}</div>
+        <div class="monitor-stat-sub">${lastLoad ? formatTs(lastLoad.ts) : 'ยังไม่มีข้อมูล'}</div>
+      </div>
+    `;
+
+    if (loadLog.length === 0) {
+      listEl.innerHTML = '<div class="monitor-empty">ยังไม่มีบันทึกการโหลดข้อมูล</div>';
+      return;
+    }
+
+    listEl.innerHTML = loadLog.map(log => {
+      const badge = log.success
+        ? '<span class="monitor-log-badge badge-ok">✓ สำเร็จ</span>'
+        : '<span class="monitor-log-badge badge-err">✗ ล้มเหลว</span>';
+      const countClass = log.count === 0 ? 'log-zero' : '';
+      const itemClass = log.success ? 'log-success' : 'log-error';
+      const detail = !log.success && log.error ? `<div class="monitor-log-time" style="color:#ef4444;font-size:10px">${log.error}</div>` : '';
+      return `
+        <div class="monitor-log-item ${itemClass}">
+          <div class="monitor-log-name">${log.name}${badge}</div>
+          <div class="monitor-log-count ${countClass}">${log.success ? log.count + ' รายการ' : '—'}</div>
+          <div class="monitor-log-time">${formatTs(log.ts)}</div>
+          <div class="monitor-log-ago">${timeAgo(log.ts)}</div>
+          ${detail}
+        </div>`;
+    }).join('');
+  }
+
+  // PIN flow
+  const monitorBtn = document.getElementById('monitorBtn');
+  const monitorPinOverlay = document.getElementById('monitorPinOverlay');
+  const monitorPinInputs = document.querySelectorAll('.pin-digit');
+  const monitorPinError = document.getElementById('monitorPinError');
+  const monitorPinCancel = document.getElementById('monitorPinCancel');
+  const monitorPanel = document.getElementById('monitorPanel');
+  const monitorPanelClose = document.getElementById('monitorPanelClose');
+
+  function openPinModal() {
+    monitorPinError.classList.add('hidden');
+    monitorPinInputs.forEach(i => { i.value = ''; i.classList.remove('pin-error'); });
+    monitorPinOverlay.classList.remove('hidden');
+    monitorPinInputs[0].focus();
+  }
+
+  function closePinModal() {
+    monitorPinOverlay.classList.add('hidden');
+  }
+
+  function checkPin() {
+    const entered = Array.from(monitorPinInputs).map(i => i.value).join('');
+    if (entered === MONITOR_PIN) {
+      closePinModal();
+      renderMonitorPanel();
+      monitorPanel.classList.remove('hidden');
+    } else {
+      monitorPinInputs.forEach(i => {
+        i.value = '';
+        i.classList.add('pin-error');
+        setTimeout(() => i.classList.remove('pin-error'), 400);
+      });
+      monitorPinError.classList.remove('hidden');
+      monitorPinInputs[0].focus();
+    }
+  }
+
+  monitorPinInputs.forEach((input, idx) => {
+    input.addEventListener('input', () => {
+      input.value = input.value.replace(/\D/g, '').slice(-1);
+      monitorPinError.classList.add('hidden');
+      if (input.value && idx < monitorPinInputs.length - 1) {
+        monitorPinInputs[idx + 1].focus();
+      }
+      if (idx === monitorPinInputs.length - 1 && input.value) {
+        checkPin();
+      }
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !input.value && idx > 0) {
+        monitorPinInputs[idx - 1].focus();
+      }
+    });
+  });
+
+  monitorBtn.addEventListener('click', openPinModal);
+  monitorPinCancel.addEventListener('click', closePinModal);
+  monitorPinOverlay.addEventListener('click', e => { if (e.target === monitorPinOverlay) closePinModal(); });
+  monitorPanelClose.addEventListener('click', () => monitorPanel.classList.add('hidden'));
 });
