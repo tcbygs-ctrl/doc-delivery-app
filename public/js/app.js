@@ -1903,12 +1903,18 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
 
+    const filtered = applyMonitorFilters(loadLog);
+
     if (loadLog.length === 0) {
       listEl.innerHTML = '<div class="monitor-empty">ยังไม่มีบันทึกการโหลดข้อมูล</div>';
       return;
     }
+    if (filtered.length === 0) {
+      listEl.innerHTML = '<div class="monitor-empty">ไม่พบบันทึกที่ตรงกับตัวกรองที่เลือก</div>';
+      return;
+    }
 
-    listEl.innerHTML = loadLog.map((log, idx) => {
+    listEl.innerHTML = filtered.map((log, idx) => {
       const badge = log.success
         ? '<span class="monitor-log-badge badge-ok">✓ สำเร็จ</span>'
         : '<span class="monitor-log-badge badge-err">✗ ล้มเหลว</span>';
