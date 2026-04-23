@@ -306,19 +306,19 @@
         ตรวจสอบการโหลดข้อมูล
       </div>
       <p class="monitor-pin-desc">กรุณาป้อน PIN เพื่อเข้าถึงข้อมูลการโหลด</p>
-      <div class="monitor-pin-inputs" id="monitorPinInputs">
-        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
-        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
-        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
-        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
-        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
-        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
-        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
-        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
-        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off">
+      <div class="monitor-pin-inputs" id="monitorPinInputs" role="group" aria-label="ป้อน PIN 9 หลัก">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off" title="PIN หลักที่ 1" aria-label="PIN หลักที่ 1">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off" title="PIN หลักที่ 2" aria-label="PIN หลักที่ 2">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off" title="PIN หลักที่ 3" aria-label="PIN หลักที่ 3">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off" title="PIN หลักที่ 4" aria-label="PIN หลักที่ 4">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off" title="PIN หลักที่ 5" aria-label="PIN หลักที่ 5">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off" title="PIN หลักที่ 6" aria-label="PIN หลักที่ 6">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off" title="PIN หลักที่ 7" aria-label="PIN หลักที่ 7">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off" title="PIN หลักที่ 8" aria-label="PIN หลักที่ 8">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete="off" title="PIN หลักที่ 9" aria-label="PIN หลักที่ 9">
       </div>
       <p class="monitor-pin-error hidden" id="monitorPinError">PIN ไม่ถูกต้อง กรุณาลองใหม่</p>
-      <button class="monitor-pin-cancel" id="monitorPinCancel">ยกเลิก</button>
+      <button type="button" class="monitor-pin-cancel" id="monitorPinCancel">ยกเลิก</button>
     </div>
   </div>
 
