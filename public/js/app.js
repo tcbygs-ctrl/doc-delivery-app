@@ -41,17 +41,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const loadLog = loadLogFromStorage();
 
-  function snapshotRecords(rows) {
+  function snapshotRecords(rows, deptField = 'แผนก ปลายทาง') {
     return rows.map(r => ({
       k: r.Key || '',
       s: r['ชื่อผู้ส่ง'] || '',
-      d: r['แผนก ปลายทาง'] || r['แผนก ต้นทาง'] || '',
+      d: r[deptField] || r['แผนก ต้นทาง'] || r['แผนก ปลายทาง'] || '',
       t: r['เวลาทำรายการ'] || r['Dropoff'] || ''
     }));
   }
 
-  function logLoad(name, count, success, error = null, records = []) {
-    loadLog.unshift({ name, count, ts: Date.now(), success, error, records });
+  function logLoad(name, count, success, error = null, records = [], groupByDept = false) {
+    loadLog.unshift({ name, count, ts: Date.now(), success, error, records, groupByDept });
     const cutoff = Date.now() - MONITOR_RETENTION_MS;
     while (loadLog.length && loadLog[loadLog.length - 1].ts < cutoff) loadLog.pop();
     saveLogToStorage(loadLog);
