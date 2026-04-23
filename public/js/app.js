@@ -1962,7 +1962,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="monitor-log-ago">${timeAgo(log.ts)}</div>
           ${errorDetail}
           ${expandBtn}
-          ${recTable}
+          ${recTableHtml}
         </div>`;
     }).join('');
 
